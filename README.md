@@ -57,4 +57,7 @@ X/Y ומשחזר את הפריסה החזותית האמיתית. בלי זה ~3
 
 ## שינוי גרסה
 לעדכן `APP_VERSION` ב-`app.js` **וגם** `CACHE` ב-`service-worker.js` לאותו מספר.
-ה-service worker הוא network-first, כדי שעדכון לא ייחסם ע"י cache ישן.
+ה-service worker הוא network-first, כדי שעדכון לא ייחסם ע"י cache ישן. שים לב
+ש-`fetch` ב-service worker קורא כברירת מחדל מה-HTTP cache של הדפדפן, ו-GitHub
+Pages מגיש עם `max-age=600` — לכן הבקשה חייבת `{cache:'no-cache'}`, אחרת
+"network-first" הופך בשקט ל-cache-first ועדכון לא מגיע במשך 10 דקות.
