@@ -1,4 +1,4 @@
-var CACHE = 'notam-reader-1.1';
+var CACHE = 'notam-reader-1.2';
 var ASSETS = ['./', './index.html', './app.js', './parser.js', './pdfload.js',
               './manifest.json', './icon.svg',
               './vendor/pdf.min.mjs', './vendor/pdf.worker.min.mjs'];
@@ -12,16 +12,29 @@ self.addEventListener('activate', function (e) {
     return Promise.all(ks.map(function (k) { return k === CACHE ? null : caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
-// network-first for app files so updates are never masked by a stale cache
+// Network-first for app files, so an update is never masked by a stale cache.
 self.addEventListener('fetch', function (e) {
-  if (e.request.method !== 'GET') return;
+  var req = e.request;
+  if (req.method !== 'GET') return;
+  var sameOrigin = new URL(req.url).origin === self.location.origin;
+  // Never touch cross-origin requests: caching them is pointless here, and
+  // answering a failed one with index.html turns a network error into a
+  // baffling "invalid PDF" further up the stack.
+  if (!sameOrigin) return;
   e.respondWith(
-    fetch(e.request).then(function (res) {
-      var copy = res.clone();
-      caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+    fetch(req).then(function (res) {
+      if (res && res.ok) {
+        var copy = res.clone();
+        caches.open(CACHE).then(function (c) { c.put(req, copy); });
+      }
       return res;
-    }).catch(function () { return caches.match(e.request).then(function (m) {
-      return m || caches.match('./index.html');
-    }); })
+    }).catch(function () {
+      return caches.match(req).then(function (m) {
+        if (m) return m;
+        // only a page navigation may fall back to the shell
+        if (req.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
+      });
+    })
   );
 });
