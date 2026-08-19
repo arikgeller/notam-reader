@@ -1,12 +1,12 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '1.3';
+  var APP_VERSION = '1.4';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'NOTAM Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
 
-  var S = { pages: null, parsed: null, flightIdx: -1, newDays: 14, showInfo: false };
+  var S = { pages: null, parsed: null, flightIdx: -1, newDays: 14, showInfo: false, showFir: false };
 
   var $ = function (id) { return document.getElementById(id); };
   var drop = $('drop'), fileIn = $('file'), err = $('err');
@@ -70,6 +70,7 @@
   }
   seg($('segNew'), function (v) { S.newDays = +v; render(); }, 'data-d');
   seg($('segInfo'), function (v) { S.showInfo = v === '1'; render(); }, 'data-v');
+  seg($('segFir'), function (v) { S.showFir = v === '1'; render(); }, 'data-v');
 
   function buildFlightSeg() {
     var el = $('segFlight'), fl = S.parsed.flights;
@@ -151,7 +152,7 @@
 
     var rows = window.NotamParser.filter(P.notams, {
       windowFrom: w0, windowTo: w1, newDays: S.newDays,
-      now: w0 || new Date(), showInfo: S.showInfo
+      now: w0 || new Date(), showInfo: S.showInfo, showFir: S.showFir
     });
 
     var vis = rows.filter(function (r) { return r.visible; });

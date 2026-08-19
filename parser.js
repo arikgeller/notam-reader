@@ -81,12 +81,20 @@
   /* ---------- scope of a section header ---------- */
   // primary = departure / destination / destination-alternate -> show all tiers
   // secondary = enroute airports + FIR areas          -> show tier 1 only
+  // primary   = departure / destination / destination-alternate  -> every tier
+  // secondary = enroute airports                                 -> tier 1 only
+  // area      = FIR / airspace blocks                            -> off by default
   function scopeOf(header) {
     var h = header.toUpperCase();
+    // Airspace blocks first: "AREA ENROUTE DESTINATION - DESTINATION ALTERNATE(S)"
+    // is a FIR block, not an alternate field, and must not match the rule below.
+    if (/^(EXTENDED\s+)?AREA\b/.test(h)) return 'area';
     if (/DEPARTURE\s*\/\s*DESTINATION AIRPORTS/.test(h)) return 'primary';
     if (/^DEPARTURE AIRPORT/.test(h)) return 'primary';
     if (/^DESTINATION AIRPORT/.test(h)) return 'primary';
     if (/DESTINATION ALTERNATE/.test(h)) return 'primary';
+    if (/AIRPORT/.test(h)) return 'secondary';
+    if (/AREA/.test(h)) return 'area';
     return 'secondary';
   }
 
@@ -235,7 +243,7 @@
   /* ---------- filtering ---------- */
 
   function filter(notams, opts) {
-    // opts: { windowFrom, windowTo, newDays, now, showInfo }
+    // opts: { windowFrom, windowTo, newDays, now, showInfo, showFir }
     var newCutoff = opts.now ? new Date(opts.now.getTime() - opts.newDays * 864e5) : null;
     return notams.map(function (nt) {
       var o = Object.create(nt);
@@ -246,8 +254,11 @@
         if (nt.valid.from && nt.valid.from > opts.windowTo) o.outOfWindow = true;
       }
       o.isNew = !!(newCutoff && nt.valid && nt.valid.from && nt.valid.from >= newCutoff);
-      // scope gate: secondary stations show critical only
-      o.hiddenByScope = nt.scope === 'secondary' && nt.tier > 1;
+      // scope gate: enroute airports show critical only; FIR blocks are off
+      // unless asked for, and then still critical only.
+      o.hiddenByScope =
+        (nt.scope === 'secondary' && nt.tier > 1) ||
+        (nt.scope === 'area' && (!opts.showFir || nt.tier > 1));
       o.visible = !o.outOfWindow && !o.hiddenByScope &&
                   (opts.showInfo || nt.tier <= 2);
       return o;
