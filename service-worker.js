@@ -1,4 +1,4 @@
-var CACHE = 'notam-reader-1.4';
+var CACHE = 'notam-reader-1.5';
 var ASSETS = ['./', './index.html', './app.js', './parser.js', './pdfload.js',
               './manifest.json', './icon.svg',
               './vendor/pdf.min.mjs', './vendor/pdf.worker.min.mjs'];

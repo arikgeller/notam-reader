@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '1.4';
+  var APP_VERSION = '1.5';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'NOTAM Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -9,16 +9,18 @@
   var S = { pages: null, parsed: null, flightIdx: -1, newDays: 14, showInfo: false, showFir: false };
 
   var $ = function (id) { return document.getElementById(id); };
-  var drop = $('drop'), fileIn = $('file'), err = $('err');
+  var drop = $('drop'), dz = $('dz'), fileIn = $('file'), err = $('err');
+  var dzTitle = dz.querySelector('h2'), dzSub = dz.querySelector('p');
+  var DZ_TITLE = dzTitle.textContent, DZ_SUB = dzSub.textContent;
 
   /* ---------- file intake ---------- */
   $('pick').onclick = function () { fileIn.click(); };
   fileIn.onchange = function () { if (fileIn.files[0]) load(fileIn.files[0]); };
   ['dragenter', 'dragover'].forEach(function (e) {
-    drop.addEventListener(e, function (ev) { ev.preventDefault(); drop.classList.add('over'); });
+    drop.addEventListener(e, function (ev) { ev.preventDefault(); dz.classList.add('over'); });
   });
   ['dragleave', 'drop'].forEach(function (e) {
-    drop.addEventListener(e, function (ev) { ev.preventDefault(); drop.classList.remove('over'); });
+    drop.addEventListener(e, function (ev) { ev.preventDefault(); dz.classList.remove('over'); });
   });
   drop.addEventListener('drop', function (ev) {
     var f = ev.dataTransfer.files[0]; if (f) load(f);
@@ -26,7 +28,8 @@
   $('reset').onclick = function () {
     S.parsed = null; fileIn.value = '';
     $('app').classList.add('hidden'); drop.classList.remove('hidden');
-    $('reset').classList.add('hidden'); err.textContent = '';
+    $('hdr').classList.add('hidden'); err.textContent = '';
+    window.scrollTo(0, 0);
   };
 
   function ready() {
@@ -36,12 +39,15 @@
 
   async function load(file) {
     err.textContent = '';
-    drop.querySelector('h2').textContent = 'קורא את הקובץ…';
+    dz.classList.add('busy');
+    dzTitle.textContent = 'קורא את הקובץ…';
+    dzSub.textContent = 'רגע אחד';
     try {
       await ready();
       var buf = await file.arrayBuffer();
       S.pages = await window.PdfLoad.extract(buf, function (i, n) {
-        drop.querySelector('h2').textContent = 'קורא עמוד ' + i + ' מתוך ' + n + '…';
+        dzTitle.textContent = 'קורא עמוד ' + i + ' מתוך ' + n + '…';
+        dzSub.textContent = Math.round(i / n * 100) + '%';
       });
       S.parsed = window.NotamParser.parse(S.pages);
       if (S.parsed.error) throw new Error(S.parsed.error);
@@ -49,13 +55,15 @@
       S.flightIdx = S.parsed.flights.length ? 0 : -1;
       drop.classList.add('hidden');
       $('app').classList.remove('hidden');
-      $('reset').classList.remove('hidden');
+      $('hdr').classList.remove('hidden');
       buildFlightSeg();
       render();
     } catch (e) {
       err.textContent = 'שגיאה: ' + (e && e.message ? e.message : e);
     } finally {
-      drop.querySelector('h2').textContent = 'גרור לכאן את ה‑OFP';
+      dz.classList.remove('busy');
+      dzTitle.textContent = DZ_TITLE;
+      dzSub.textContent = DZ_SUB;
     }
   }
 
