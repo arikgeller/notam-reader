@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon.svg">
-<title>NOTAM Reader</title>
+<title>FP Reader</title>
 <style>
 :root{
   --bg:#0d1117; --panel:#161b22; --panel2:#1c2430; --line:#2a3441;
@@ -149,7 +149,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:34px 0 24px}
 
 <header id="hdr" class="hidden">
   <div class="hrow">
-    <span class="logo">NOTAM Reader</span>
+    <span class="logo">FP Reader</span>
     <span class="ver" id="ver"></span>
     <span class="spacer"></span>
     <button id="reset">קובץ חדש</button>
@@ -171,9 +171,9 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:34px 0 24px}
           <rect x="14" y="41" width="22" height="5" rx="2.5" fill="#5b6976"/>
         </svg>
       </div>
-      <h1 class="wordmark">NOTAM<span>READER</span></h1>
+      <h1 class="wordmark">FP<span>READER</span></h1>
       <div class="runway" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-      <p class="tag">קורא את מקטע ה‑NOTAM מתוך ה‑OFP, מסווג לפי חשיבות<br>ומסנן לחלון הטיסה</p>
+      <p class="tag">עובר על תוכנית הטיסה כולה, בודק את הנתונים<br>ומתדרך על מה שחשוב</p>
     </div>
 
     <div class="dropzone" id="dz">
@@ -233,6 +233,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:34px 0 24px}
 
 <script src="pdfload.js"></script>
 <script src="parser.js"></script>
+<script src="ofp.js"></script>
 <script type="module">
 import * as pdfjsLib from './vendor/pdf.min.mjs';
 pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf.worker.min.mjs';
