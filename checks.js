@@ -18,18 +18,30 @@
   /* ---------- 1. DOW against the weight & balance tables ---------- */
 
   define('dow', 'משקל ריק תפעולי (DOW)', function (leg, ref) {
+    // A missing input is itself a finding: without it the DOW cannot be verified,
+    // so warn rather than skip quietly.
     var data = ref && ref.dow;
-    if (!data) return R('dow', 'DOW', 'skip', 'טבלאות המשקל לא נטענו');
+    if (!data) return R('dow', 'DOW', 'warn', 'לא ניתן לבדוק DOW — טבלאות המשקל לא נטענו');
 
     var reg = leg.reg;
     var tables = data.dow[reg];
-    if (!tables) return R('dow', 'DOW', 'skip', 'אין טבלת משקל לרישום ' + (reg || '—'));
+    if (!tables) return R('dow', 'DOW', 'warn',
+      'לא ניתן לבדוק DOW — אין טבלת משקל לרישום ' + (reg || 'לא מזוהה'),
+      [{ k: 'רישום ב-OFP', v: reg || '—' },
+       { k: 'רישומים בטבלה', v: Object.keys(data.dow).join(', ') }]);
 
     var crew = leg.briefing && leg.briefing.crew;
-    if (!crew) return R('dow', 'DOW', 'skip', 'הרכב הצוות לא מופיע בתדריך המוקדן');
+    if (!crew) return R('dow', 'DOW', 'warn',
+      'לא ניתן לבדוק DOW — הרכב הצוות חסר',
+      [{ k: 'מקור הנתון', v: 'Dispatch Briefing Info' },
+       { k: 'מטוס', v: reg || '—' },
+       { k: 'DOW ב-OFP', v: (leg.dow && leg.dow.est ? leg.dow.est + ' kg' : 'לא נמצא') }],
+      { note: 'שורת CREW אינה מופיעה בעמוד Dispatch Briefing Info של רגל זו. ' +
+              'בלעדיה אי אפשר לבחור שורה בטבלת המשקל — בדוק ידנית מול ה-OFP.' });
 
     var ofpDow = leg.dow && leg.dow.est;
-    if (!ofpDow) return R('dow', 'DOW', 'skip', 'לא נמצא DOW ב-OFP');
+    if (!ofpDow) return R('dow', 'DOW', 'warn', 'לא ניתן לבדוק DOW — הערך לא נמצא ב-OFP',
+      [{ k: 'מטוס / צוות', v: (reg || '—') + ' · ' + crew }]);
 
     // expected pantry code, from the destination
     var pcTable = data.pantryCodes[reg];
@@ -78,7 +90,9 @@
     if (expectedDow) detail.push({ k: 'לפי הטבלה (STANDARD)', v: expectedDow + ' kg · DOI ' + expectedDoi });
 
     if (!stdRow) {
-      return R('dow', 'DOW', 'skip', 'אין שורה לצוות ' + crew + ' בטבלת ' + reg, detail);
+      return R('dow', 'DOW', 'warn',
+        'לא ניתן לבדוק DOW — אין שורה להרכב צוות ' + crew + ' בטבלת ' + reg, detail,
+        { note: 'הרכבי הצוות שקיימים בטבלה: ' + Object.keys(std ? std.rows : {}).join(', ') });
     }
     if (!expectedCode) {
       if (matches.length) {
