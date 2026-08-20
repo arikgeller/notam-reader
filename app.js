@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '2.3';
+  var APP_VERSION = '2.4';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -39,8 +39,12 @@
   }
 
   // reference tables ride along with the app; failure here must not block parsing
-  var refReady = fetch('data/dow.json').then(function (r) { return r.json(); })
-    .then(function (j) { S.ref.dow = j; }).catch(function () { S.ref.dow = null; });
+  var refReady = Promise.all([
+    fetch('data/dow.json').then(function (r) { return r.json(); })
+      .then(function (j) { S.ref.dow = j; }).catch(function () { S.ref.dow = null; }),
+    fetch('data/limits.json').then(function (r) { return r.json(); })
+      .then(function (j) { S.ref.limits = j; }).catch(function () { S.ref.limits = null; })
+  ]);
 
   async function load(file) {
     err.textContent = '';

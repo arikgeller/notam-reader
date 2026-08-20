@@ -1,0 +1,18 @@
+{
+  "_source": "Arkia OM-A 10.12 — Fuel Planning and Compliance Guidelines",
+  "_verified": false,
+  "taxiFuel": { "E195": 150, "Airbus Family": 206 },
+  "apuPerHourOverTwoHoursGround": { "E195": 100, "Airbus Family": 130 },
+  "tankeringMarginBelowMaxWeights": { "E195": 500, "A320": 800, "A321": 800 },
+  "landingWeightMarginPct": 1,
+  "contingency": {
+    "basisA1Pct": 5,
+    "basisA2Pct": 3,
+    "basisA2Requires": "En-route alternate within a circle centred on the planned route, at a distance from destination not exceeding the greater of 25% of total flight plan distance, or 20% + 50 NM; circle radius = 20% of total flight plan distance (still air).",
+    "basisB": "Fuel to fly 5 minutes at holding speed at 1,500 ft above the destination airport in standard conditions.",
+    "rule": "greater of A or B"
+  },
+  "finalReserve": "30 minutes holding at 1500 ft above the alternate (or destination if no alternate required), standard conditions",
+  "noAlternateHold": "15 minutes at 1500 ft above the destination, standard conditions",
+  "isolatedAirport": "2 hours at cruise speed above the destination"
+}

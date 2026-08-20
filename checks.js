@@ -177,6 +177,125 @@
       }));
   });
 
+  /* ---------- 5. fuel arithmetic (OM-A 10.12.1) ---------- */
+  // REQUIRED = TRIP + CONTINGENCY + ALTERNATE + FINAL RESERVE
+  // TAKEOFF  = REQUIRED + EXTRA
+  // TOTAL    = TAKEOFF + TAXI
+
+  define('fuelsum', 'הרכב הדלק', function (leg) {
+    var f = leg.fuel || {};
+    var need = ['trip', 'contgcy', 'mlf', 'altn', 'required', 'takeoff', 'taxi', 'total'];
+    var missing = need.filter(function (k) { return !f[k]; });
+    if (missing.length) {
+      return R('fuelsum', 'הרכב הדלק', 'warn',
+        'לא ניתן לאמת את סיכומי הדלק — שורות חסרות',
+        [{ k: 'חסר', v: missing.join(', ').toUpperCase() }]);
+    }
+    var sumReq = f.trip.kg + f.contgcy.kg + f.mlf.kg + f.altn.kg;
+    var sumTo  = f.required.kg + f.extra ? f.required.kg + (f.extra ? f.extra.kg : 0) : f.required.kg;
+    var sumTot = f.takeoff.kg + f.taxi.kg;
+
+    var lines = [
+      { label: 'REQUIRED', got: f.required.kg, want: sumReq,
+        how: 'TRIP ' + f.trip.kg + ' + CONT ' + f.contgcy.kg + ' + MLF ' + f.mlf.kg + ' + ALTN ' + f.altn.kg },
+      { label: 'TAKEOFF', got: f.takeoff.kg, want: sumTo,
+        how: 'REQUIRED ' + f.required.kg + ' + EXTRA ' + (f.extra ? f.extra.kg : 0) },
+      { label: 'TOTAL', got: f.total.kg, want: sumTot,
+        how: 'TAKEOFF ' + f.takeoff.kg + ' + TAXI ' + f.taxi.kg }
+    ];
+    var bad = lines.filter(function (l) { return l.got !== l.want; });
+    var detail = lines.map(function (l) {
+      return { k: l.label, v: l.got + ' kg   (' + l.how + ' = ' + l.want + ')' +
+                              (l.got === l.want ? '' : '   \u2718') };
+    });
+    if (bad.length) {
+      return R('fuelsum', 'הרכב הדלק', 'fail',
+        'סיכומי הדלק לא מסתדרים: ' + bad.map(function (l) { return l.label; }).join(', '), detail);
+    }
+    return R('fuelsum', 'הרכב הדלק', 'ok', 'כל הסיכומים מסתדרים', detail);
+  });
+
+  /* ---------- 6. taxi fuel (OM-A 10.12.3) ---------- */
+
+  define('taxi', 'דלק נסיעה קרקעית', function (leg, ref) {
+    var lim = ref && ref.limits && ref.limits.taxiFuel;
+    var f = leg.fuel && leg.fuel.taxi;
+    if (!lim) return R('taxi', 'TAXI', 'warn', 'לא ניתן לבדוק — טבלת המגבלות לא נטענה');
+    if (!f) return R('taxi', 'TAXI', 'warn', 'לא נמצאה שורת TAXI ב-OFP');
+
+    var fam = /^A3[12]/.test(leg.acType || '') || /^A21N|^A320|^A321/.test(leg.acType || '')
+      ? 'Airbus Family' : (/^E19/.test(leg.acType || '') ? 'E195' : null);
+    if (!fam) return R('taxi', 'TAXI', 'warn',
+      'לא ניתן לבדוק — סוג מטוס לא מוכר: ' + (leg.acType || '—'),
+      [{ k: 'ב-OFP', v: f.kg + ' kg' }]);
+
+    var want = lim[fam];
+    var detail = [{ k: 'ב-OFP', v: f.kg + ' kg' },
+                  { k: 'לפי OM-A 10.12.3', v: want + ' kg (' + fam + ')' },
+                  { k: 'סוג מטוס', v: leg.acType }];
+    if (f.kg === want) return R('taxi', 'TAXI', 'ok', 'תקין — ' + f.kg + ' kg', detail);
+    return R('taxi', 'TAXI', 'warn',
+      'חריגה מהתקן: ' + f.kg + ' kg במקום ' + want + ' kg', detail,
+      { note: 'לפעולה ממושכת בקרקע (מעל שעתיים) יש להוסיף APU: Airbus 130 ק"ג לשעה, E195 100 ק"ג לשעה.' });
+  });
+
+  /* ---------- 7. contingency fuel (OM-A 10.12.2) ---------- */
+
+  define('contingency', 'דלק מילואים (Contingency)', function (leg) {
+    var f = leg.fuel || {};
+    if (!f.contgcy || !f.trip) return R('contingency', 'CONT', 'warn', 'לא נמצאו שורות CONT / TRIP ב-OFP');
+
+    var detail = [
+      { k: 'ב-OFP', v: f.contgcy.kg + ' kg   (' + f.contgcy.basis + ')' },
+      { k: 'TRIP', v: f.trip.kg + ' kg' }
+    ];
+    if (f.contgcy.pct) {
+      var want = Math.round(f.trip.kg * f.contgcy.pct / 100);
+      detail.push({ k: 'חישוב', v: f.contgcy.pct + '% \u00d7 ' + f.trip.kg + ' = ' + want + ' kg' });
+      if (Math.abs(want - f.contgcy.kg) > 1) {
+        return R('contingency', 'CONT', 'fail',
+          'לא תואם: ' + f.contgcy.kg + ' kg, לפי ' + f.contgcy.pct + '% היה צריך ' + want + ' kg', detail);
+      }
+      if (f.contgcy.pct === 3) {
+        return R('contingency', 'CONT', 'warn',
+          'מתוכנן על 3% — מחייב שדה חלופי בנתיב שעומד בקריטריון', detail,
+          { note: 'OM-A 10.12.2: 3% מותר רק כשקיים ENR ALT במעגל שמרכזו על הנתיב, במרחק מהיעד שאינו עולה על ' +
+                  '25% מסך מרחק הטיסה, או 20% + 50NM — הגדול מביניהם; רדיוס המעגל 20% מסך המרחק. ' +
+                  (leg.briefing && leg.briefing.enrAlt && leg.briefing.enrAlt.length
+                    ? 'ENR ALT בתדריך: ' + leg.briefing.enrAlt.join(', ') + ' — ודא שהקריטריון מתקיים.'
+                    : 'לא צוין ENR ALT בתדריך המוקדן.') });
+      }
+      return R('contingency', 'CONT', 'ok', 'תקין — ' + f.contgcy.kg + ' kg (' + f.contgcy.pct + '% מה-TRIP)', detail);
+    }
+    return R('contingency', 'CONT', 'info',
+      'מתוכנן לפי מינימום חברה (' + f.contgcy.basis + ') — ' + f.contgcy.kg + ' kg', detail,
+      { note: 'OM-A 10.12.2: ה-contingency הוא הגדול מבין 5% מה-TRIP (או 3% בתנאים) לבין דלק ל-5 דקות המתנה ' +
+              'ב-1,500 רגל מעל שדה היעד. כאן נבחר המינימום — ודא שהוא אכן הגדול.' });
+  });
+
+  /* ---------- 8. landing weight margin (OM-A 10.12.5) ---------- */
+
+  define('ldwmargin', 'מרווח למשקל נחיתה', function (leg) {
+    var l = leg.ldw;
+    if (!l || !l.est || !l.max) return R('ldwmargin', 'LDW', 'warn', 'לא נמצא משקל נחיתה מתוכנן מול מקסימום');
+    var margin = l.max - l.est;
+    var onePct = Math.round(l.max * 0.01);
+    var detail = [
+      { k: 'LDW מתוכנן', v: l.est + ' kg' },
+      { k: 'MLW', v: l.max + ' kg' },
+      { k: 'מרווח', v: margin + ' kg' },
+      { k: '1% מ-MLW', v: onePct + ' kg' }
+    ];
+    if (margin < 0) return R('ldwmargin', 'LDW', 'fail', 'חריגה מ-MLW ב-' + (-margin) + ' kg', detail);
+    if (margin < onePct) {
+      return R('ldwmargin', 'LDW', 'warn',
+        'מרווח קטן מ-1% מה-MLW — ' + margin + ' kg', detail,
+        { note: 'OM-A 10.12.5: כשהמשקל קרוב למגבלה יש לשמור מרווח של 1% ממשקל הנחיתה המרבי הצפוי, ' +
+                'כדי לאפשר שינויים של הרגע האחרון. תאם את נתוני הדלק עם ה-FOO.' });
+    }
+    return R('ldwmargin', 'LDW', 'ok', 'מרווח ' + margin + ' kg (מעל 1% מה-MLW)', detail);
+  });
+
   /* ---------- runner ---------- */
 
   function run(leg, ref) {

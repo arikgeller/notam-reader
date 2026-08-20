@@ -66,7 +66,8 @@
     r.fuel = {};
     var rows = [
       ['trip',     /^TRIP\s+([A-Z]{4})\s+(\d[\d,]*)\s+([\d.]+)(?:\s+(\d+)NM)?/m, true],
-      ['contgcy',  /^RR\s*5%\s+(\d[\d,]*)\s+([\d.]+)/m, false],
+      // the contingency line is labelled by its basis: "RR 5%" or "RR CONT MIN"
+      ['contgcy',  /^RR\s+(?:(\d+)%|CONT\s+MIN)\s+(\d[\d,]*)\s+([\d.]+)/m, 'cont'],
       ['mlf',      /^MLF\s+(\d[\d,]*)\s+([\d.]+)/m, false],
       ['altn',     /^ALTN\s+([A-Z]{4})\s+(\d[\d,]*)\s+([\d.]+)(?:\s+(\d+)NM)?/m, true],
       ['required', /^REQUIRED\s+(\d[\d,]*)\s+([\d.]+)/m, false],
@@ -78,9 +79,14 @@
     rows.forEach(function (row) {
       var m = row[1].exec(text);
       if (!m) return;
-      r.fuel[row[0]] = row[2]
-        ? { to: m[1], kg: num(m[2]), min: hhdotmm(m[3]), nm: m[4] ? num(m[4]) : null }
-        : { kg: num(m[1]), min: hhdotmm(m[2]) };
+      if (row[2] === 'cont') {
+        r.fuel[row[0]] = { basis: m[1] ? m[1] + '%' : 'CONT MIN',
+                           pct: m[1] ? +m[1] : null, kg: num(m[2]), min: hhdotmm(m[3]) };
+      } else if (row[2]) {
+        r.fuel[row[0]] = { to: m[1], kg: num(m[2]), min: hhdotmm(m[3]), nm: m[4] ? num(m[4]) : null };
+      } else {
+        r.fuel[row[0]] = { kg: num(m[1]), min: hhdotmm(m[2]) };
+      }
     });
     r.minDivFuel = grab(/MIN DIV FUEL:\s*(\d[\d,]*)\s*KGS/, text, num);
 
