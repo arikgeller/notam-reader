@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '2.2';
+  var APP_VERSION = '2.3';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';

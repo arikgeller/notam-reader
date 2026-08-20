@@ -106,15 +106,23 @@
     if (expectedDow === ofpDow) {
       return R('dow', 'DOW', 'ok', 'תואם — ' + ofpDow + ' kg, קוד ' + expectedCode + ', צוות ' + crew, detail);
     }
-    // mismatch: say exactly what the tables do match, so a bad transcription is obvious
-    var alt = matches.length
-      ? 'הערך שב-OFP כן תואם ל' + matches.map(function (m) {
-          return 'קוד ' + m.code + ' (' + m.variant + ')'; }).join(' / ')
-      : 'הערך שב-OFP לא תואם לאף תא בטבלת ' + reg + ' עבור צוות ' + crew;
+    // Mismatch. The registration + crew row is what governs, so show that whole
+    // row: the wrongly-taken column then stands out at a glance.
     detail.push({ k: 'פער', v: (ofpDow - expectedDow > 0 ? '+' : '') + (ofpDow - expectedDow) + ' kg' });
+    detail.push({ k: 'השורה בטבלה', v: std.codes.map(function (c, i) {
+      var w = stdRow[i][0];
+      var mark = w === ofpDow ? ' \u2190 ב-OFP' : (c === expectedCode ? ' \u2190 הנכון' : '');
+      return c + '=' + w + mark;
+    }).join('   ') });
+
+    var alt = matches.length
+      ? 'הערך שב-OFP תואם לקוד ' + matches.map(function (m) {
+          return m.code + (m.variant === 'STANDARD' ? '' : ' (' + m.variant + ')'); }).join(' / ') +
+        ', אבל היעד ' + (destIata || leg.dest) + ' מחייב קוד ' + expectedCode + '.'
+      : 'הערך שב-OFP לא תואם לאף קוד בשורת ' + crew + ' של ' + reg + '.';
     return R('dow', 'DOW', 'fail',
-      'אי-התאמה: ב-OFP ' + ofpDow + ' kg, לפי הטבלה ' + expectedDow + ' kg',
-      detail, { note: alt });
+      'DOW שגוי בתוכנית הטיסה — צריך להיות ' + expectedDow + ' kg, בפועל ' + ofpDow + ' kg',
+      detail, { note: alt + ' הקובע הוא הרישום ' + reg + ' והרכב הצוות ' + crew + '.' });
   });
 
   /* ---------- 2. weight margins ---------- */
