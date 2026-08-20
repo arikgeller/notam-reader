@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '2.4';
+  var APP_VERSION = '3.0';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -153,59 +153,211 @@
                    'מרחב בנתיב בית-יעד', 'מרחב בנתיב יעד-משנה'];
 
   /* ---------- render ---------- */
+
+  var STATUS_ORDER = { fail: 0, warn: 1, info: 2, ok: 3, skip: 4 };
+  var ROLE_HE = { dep: 'מוצא', dest: 'יעד', altn: 'חלופי' };
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function findCheck(res, id) {
+    return res.filter(function (r) { return r.id === id; })[0] || null;
+  }
+  function alertLine(chk) {
+    if (!chk || chk.status === 'ok' || chk.status === 'info') return '';
+    return '<div class="alert a-' + chk.status + '">' + esc(chk.headline) + '</div>';
+  }
+
   function render() {
     var P = S.parsed, fl = P.flights;
-    var w0 = null, w1 = null, info = '';
+    var w0 = null, w1 = null;
+    var flight = null;
     if (fl.length) {
       if (S.flightIdx >= 0 && fl[S.flightIdx]) {
-        var f = fl[S.flightIdx];
-        w0 = f.off; w1 = f.on;
-        info = 'STD ' + hhmm(f.off) + ' · STA ' + hhmm(f.on) + ' · ' + f.dateStr +
-               (f.altn ? ' · ALTN ' + f.altn : '');
-      } else {
-        w0 = fl[0].off; w1 = fl[fl.length - 1].on;
-        info = 'חלון מאוחד ' + hhmm(w0) + '–' + hhmm(w1) + ' · ' + fl[0].dateStr;
-      }
+        flight = fl[S.flightIdx]; w0 = flight.off; w1 = flight.on;
+      } else { w0 = fl[0].off; w1 = fl[fl.length - 1].on; }
     }
-    $('fInfo').textContent = info;
+    $('fInfo').textContent = flight
+      ? 'STD ' + hhmm(flight.off) + ' · STA ' + hhmm(flight.on)
+      : (w0 ? 'חלון מאוחד ' + hhmm(w0) + '–' + hhmm(w1) : '');
+
+    var leg = null;
+    if (S.ofp && S.ofp.legs.length) {
+      if (flight) leg = S.ofp.legs.filter(function (l) { return l.flightNo === flight.number; })[0];
+      if (!leg) leg = S.ofp.legs[0];
+    }
+    var res = leg ? window.Checks.run(leg, S.ref) : [];
 
     var rows = window.NotamParser.filter(P.notams, {
       windowFrom: w0, windowTo: w1, newDays: S.newDays,
       now: w0 || new Date(), showInfo: S.showInfo, showFir: S.showFir
     });
-
-    renderBrief(fl.length ? (S.flightIdx >= 0 ? fl[S.flightIdx] : null) : null);
-
     var vis = rows.filter(function (r) { return r.visible; });
+
+    // ICAO codes seen in this document stay in capitals in the plain-English text
+    S.icaos = {};
+    P.notams.forEach(function (n) { if (n.station) S.icaos[n.station.icao] = 1; });
+    if (leg) { S.icaos[leg.dep] = 1; S.icaos[leg.dest] = 1; if (leg.altn) S.icaos[leg.altn] = 1; }
+
+    $('brief').innerHTML =
+      secPlan(leg, res) + secDispatch(leg, res) + secWx(leg, res) + secNotam(vis, rows, res);
+
+    bindToggles();
+  }
+
+  /* ---------- 1. flight plan ---------- */
+
+  function sec(n, title, right, inner, extraClass) {
+    return '<section class="sec' + (extraClass ? ' ' + extraClass : '') + '">' +
+      '<h3><span class="n">' + n + '</span>' + esc(title) +
+      (right ? '<span class="rt">' + esc(right) + '</span>' : '') + '</h3>' +
+      inner + '</section>';
+  }
+
+  function facts(list) {
+    return '<dl class="facts">' + list.map(function (f) {
+      return '<dt>' + esc(f[0]) + '</dt><dd' + (f[2] ? ' class="' + f[2] + '"' : '') + '>' +
+             esc(f[1]) + '</dd>';
+    }).join('') + '</dl>';
+  }
+
+  function secPlan(leg, res) {
+    if (!leg) return sec(1, 'תוכנית הטיסה', '', '<p class="none">לא זוהתה תוכנית טיסה</p>');
+    var dow = findCheck(res, 'dow');
+    var fuelChecks = ['fuelsum', 'taxi', 'contingency'].map(function (id) { return findCheck(res, id); })
+      .filter(function (c) { return c && (c.status === 'fail' || c.status === 'warn'); });
+
+    var f = leg.fuel || {};
+    var rowsF = [
+      ['תאריך', leg.dateStr || '—'],
+      ['נתיב', leg.dep + ' → ' + leg.dest + (leg.altn ? '   ALTN ' + leg.altn : '')],
+      ['מטוס', (leg.reg || '—') + '   ' + (leg.acType || '')],
+      ['STD', (leg.std ? leg.std + 'Z' : '—') + (leg.sta ? '   STA ' + leg.sta + 'Z' : '')],
+      ['DOW', (leg.dow && leg.dow.est ? leg.dow.est + ' kg' : '—'),
+        dow && dow.status === 'fail' ? 'bad' : ''],
+      ['דלק', (f.total ? f.total.kg + ' kg' : '—') +
+        (f.trip ? '   TRIP ' + f.trip.kg : '') + (f.extra ? '   EXTRA ' + f.extra.kg : ''),
+        fuelChecks.length ? 'bad' : '']
+    ];
+    var body = facts(rowsF);
+    if (dow && dow.status !== 'ok') body += alertLine(dow) + detailBox(dow);
+    fuelChecks.forEach(function (c) { body += alertLine(c) + detailBox(c); });
+    return sec(1, 'תוכנית הטיסה', leg.flightNo, body);
+  }
+
+  function detailBox(chk) {
+    if (!chk.detail || !chk.detail.length) return chk.note ? '<p class="hint">' + esc(chk.note) + '</p>' : '';
+    return '<details class="more-d"><summary>פרטים</summary>' +
+      '<dl class="facts mono">' + chk.detail.map(function (d) {
+        return '<dt>' + esc(d.k) + '</dt><dd>' + esc(d.v) + '</dd>';
+      }).join('') + '</dl>' +
+      (chk.note ? '<p class="hint">' + esc(chk.note) + '</p>' : '') + '</details>';
+  }
+
+  /* ---------- 2. dispatch notes ---------- */
+
+  function secDispatch(leg, res) {
+    var b = leg && leg.briefing;
+    if (!b) return sec(2, 'Dispatch Notes', '', '<p class="none">אין עמוד תדריך מוקדן</p>');
+    var mel = findCheck(res, 'mel');
+    var body = '';
+    if (b.mel && b.mel.length) {
+      body += '<div class="mel"><div class="mel-h">' + b.mel.length + ' פריטי MEL פתוחים</div>' +
+        b.mel.map(function (m) { return '<div class="mel-i">' + esc(m) + '</div>'; }).join('') + '</div>';
+    } else {
+      body += '<p class="clean">' + (b.melClear ? 'MEL: NONE — אין תקלות פתוחות' : 'לא צוינו פריטי MEL') + '</p>';
+    }
+    var notes = [];
+    if (b.extraFuelReason) notes.push(['דלק נוסף', b.extraFuelReason]);
+    if (b.crew) notes.push(['צוות', b.crew]);
+    if (b.enrAlt && b.enrAlt.length) notes.push(['ENR ALT', b.enrAlt.join(', ')]);
+    (b.airportNotes || []).forEach(function (n) { notes.push([n.icao, n.text]); });
+    if (notes.length) body += facts(notes);
+    return sec(2, 'Dispatch Notes', '', body);
+  }
+
+  /* ---------- 3. significant weather ---------- */
+
+  function secWx(leg, res) {
+    var w = leg && leg.weather;
+    if (!w) return sec(3, 'מזג אוויר חריג', '', '<p class="none">אין מקטע מזג אוויר</p>');
+
+    var want = { dep: 1, dest: 1, altn: 1 };
+    var sts = w.stations.filter(function (s) { return want[s.role]; }).map(window.Wx.station);
+
+    var body = '', anything = false;
+    sts.forEach(function (st) {
+      var head = '<div class="wx-st"><span class="wx-i">' + esc(st.icao) + '</span>' +
+                 '<span class="wx-r">' + (ROLE_HE[st.role] || st.role) + '</span>';
+      if (st.clean) {
+        body += head + '<span class="wx-ok">ללא חריגים</span></div>';
+        return;
+      }
+      anything = true;
+      body += head + '</div><ul class="wx-l">';
+      if (st.metar && st.metar.hits.length) {
+        st.metar.hits.forEach(function (h) {
+          body += '<li><span class="wx-tag">METAR</span>' + esc(h.text) + '</li>';
+        });
+      }
+      st.tafHits.forEach(function (sg) {
+        var lbl = sg.label === 'base' ? 'TAF' : 'TAF ' + sg.label;
+        sg.hits.forEach(function (h) {
+          body += '<li><span class="wx-tag">' + esc(lbl) + '</span>' + esc(h.text) +
+                  (sg.periodText ? '<span class="wx-p">' + esc(sg.periodText) + '</span>' : '') + '</li>';
+        });
+      });
+      body += '</ul>';
+      body += '<details class="more-d"><summary>METAR / TAF מקוריים</summary><pre class="raw2">' +
+        esc(st.rawMetar.concat(st.rawTaf).join('\n')) + '</pre></details>';
+    });
+
+    var sig = findCheck(res, 'sigmet');
+    if (sig && sig.status === 'warn') {
+      anything = true;
+      body += '<div class="wx-st"><span class="wx-i">בנתיב</span><span class="wx-r">SIGMET</span></div><ul class="wx-l">';
+      sig.detail.forEach(function (d) {
+        body += '<li><span class="wx-tag">' + esc(d.k.split(' · ')[0]) + '</span>' +
+                esc(d.k.split(' · ')[1] || '') + ' — ' + esc(d.v.slice(0, 180)) + '</li>';
+      });
+      body += '</ul>';
+    }
+    if (!anything && !body) body = '<p class="clean">אין חריגים</p>';
+    return sec(3, 'מזג אוויר חריג', 'רוח >15kt · ענן <2000ft · CB/TCU · משקעים · ראות <9999', body);
+  }
+
+  /* ---------- 4. NOTAMs ---------- */
+
+  var SEC_ORDER = ['בית ויעד', 'שדה בית', 'שדה יעד', 'שדה משנה',
+                   'שדות בנתיב', 'שדות בנתיב (נוספים)',
+                   'מרחב סביב הבית', 'מרחב סביב היעד', 'מרחב מורחב בית-יעד',
+                   'מרחב בנתיב בית-יעד', 'מרחב בנתיב יעד-משנה'];
+  var ROLE = {
+    'בית ויעד': 'בית / יעד', 'שדה בית': 'שדה בית', 'שדה יעד': 'שדה יעד',
+    'שדה משנה': 'שדה משנה', 'שדות בנתיב': 'שדה בנתיב', 'שדות בנתיב (נוספים)': 'שדה בנתיב',
+    'מרחב מורחב בית-יעד': 'מרחב', 'מרחב בנתיב בית-יעד': 'מרחב', 'מרחב בנתיב יעד-משנה': 'מרחב',
+    'מרחב סביב הבית': 'מרחב', 'מרחב סביב היעד': 'מרחב'
+  };
+
+  function secNotam(vis, rows, res) {
     var c = { 1: 0, 2: 0, 3: 0, n: 0 };
     vis.forEach(function (r) { c[r.tier]++; if (r.isNew) c.n++; });
-    var dropped = rows.length - vis.length;
+    var right = c[1] + ' קריטי · ' + c[2] + ' חשוב' + (c.n ? ' · ' + c.n + ' חדש' : '') +
+                '   (' + vis.length + '/' + rows.length + ')';
 
-    $('sum').innerHTML =
-      '<span class="pill p1">' + c[1] + ' קריטי</span>' +
-      '<span class="pill p2">' + c[2] + ' חשוב</span>' +
-      (S.showInfo ? '<span class="pill p3">' + c[3] + ' לידיעה</span>' : '') +
-      (c.n ? '<span class="pill pn">' + c.n + ' חדש</span>' : '') +
-      '<span class="pill p3">' + dropped + ' סוננו מתוך ' + rows.length + '</span>';
-
-    // group by section, then station
     var groups = {}, order = [];
-    function bucket(sec, st) {
-      var key = sec + '||' + (st ? st.icao : '—');
-      if (!groups[key]) { groups[key] = { sec: sec, st: st, items: [] }; order.push(key); }
+    function bucket(secL, st) {
+      var key = secL + '||' + (st ? st.icao : '—');
+      if (!groups[key]) { groups[key] = { sec: secL, st: st, items: [] }; order.push(key); }
       return groups[key];
     }
-    // Primary stations always get a group. A departure or destination field that
-    // silently vanishes (everything expired or filtered) reads as "not parsed";
-    // say so explicitly instead.
-    P.notams.forEach(function (r) {
-      if (r.scope === 'primary') bucket(r.sectionLabel, r.station);
-    });
+    S.parsed.notams.forEach(function (r) { if (r.scope === 'primary') bucket(r.sectionLabel, r.station); });
     vis.forEach(function (r) { bucket(r.sectionLabel, r.station).items.push(r); });
     order.sort(function (a, b) {
-      var ga = groups[a], gb = groups[b];
-      var d = SEC_ORDER.indexOf(ga.sec) - SEC_ORDER.indexOf(gb.sec);
-      return d || 0;
+      return SEC_ORDER.indexOf(groups[a].sec) - SEC_ORDER.indexOf(groups[b].sec);
     });
 
     var html = '';
@@ -219,97 +371,44 @@
         return bv - av;
       });
       html += '<div class="grp"><div class="grp-h">' +
-        '<span class="icao">' + (g.st ? g.st.icao : '—') + '</span>' +
+        '<span class="icao">' + (g.st ? esc(g.st.icao) : '—') + '</span>' +
         '<span class="nm">' + esc(g.st && g.st.name ? g.st.name : '') + '</span>' +
-        '<span class="role">' + (ROLE[g.sec] || g.sec) + '</span></div>';
-
-      if (g.items.length) {
-        g.items.forEach(function (r) { html += card(r); });
-      } else {
-        html += '<div class="empty">אין NOTAM להצגה — הכל פג תוקף לחלון הטיסה או מסווג "לידיעה"</div>';
-      }
+        '<span class="role">' + esc(ROLE[g.sec] || g.sec) + '</span></div>';
+      if (g.items.length) g.items.forEach(function (r) { html += card(r); });
+      else html += '<div class="empty">אין NOTAM להצגה</div>';
       html += '</div>';
     });
-
-    $('list').innerHTML = html || '<div class="bar">אין NOTAMים להצגה בהגדרות הנוכחיות.</div>';
-    [].forEach.call($('list').querySelectorAll('.card:not(.flat) .chead'), function (h) {
-      h.onclick = function () { h.parentNode.classList.toggle('open'); };
-    });
-  }
-
-  function esc(s) {
-    return String(s).replace(/[&<>"]/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
-    });
-  }
-
-  var STATUS_ORDER = { fail: 0, warn: 1, info: 2, ok: 3, skip: 4 };
-
-  function renderBrief(flight) {
-    var host = $('brief');
-    if (!S.ofp || !S.ofp.legs.length) { host.innerHTML = ''; return; }
-
-    // match the OFP leg to the flight selected above; fall back to the first
-    var leg = null;
-    if (flight) leg = S.ofp.legs.find(function (l) { return l.flightNo === flight.number; });
-    if (!leg) leg = S.ofp.legs[0];
-
-    var res = window.Checks.run(leg, S.ref);
-    res.sort(function (a, b) { return STATUS_ORDER[a.status] - STATUS_ORDER[b.status]; });
-
-    var counts = { fail: 0, warn: 0 };
-    res.forEach(function (r) { if (counts[r.status] !== undefined) counts[r.status]++; });
-    var sub = counts.fail ? counts.fail + ' דורש טיפול'
-            : counts.warn ? counts.warn + ' לתשומת לב'
-            : 'לא נמצאו חריגות';
-
-    var h = '<div class="brief"><div class="brief-h">' +
-      '<span class="ava">' +
-        '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#58a6ff" ' +
-        'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
-        '<path d="M12 3a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V7a4 4 0 0 1 4-4Z"/>' +
-        '<path d="M5 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1"/></svg></span>' +
-      '<span><b>תדריך</b><br><span class="sub">' + esc(leg.flightNo + ' · ' + leg.dep + '→' + leg.dest +
-        ' · ' + (leg.acType || '') + ' ' + (leg.reg || '') + ' · ' + sub) + '</span></span></div>';
-
-    res.forEach(function (r) {
-      h += '<div class="chk s-' + r.status + '"><span class="dot"></span><div class="chk-b">' +
-        '<div class="chk-t">' + esc(r.title) + '</div>' +
-        '<div class="chk-h">' + esc(r.headline) + '</div>';
-      if (r.detail && r.detail.length) {
-        h += '<dl class="chk-d">';
-        r.detail.forEach(function (d) {
-          h += '<dt>' + esc(d.k) + '</dt><dd>' + esc(d.v) + '</dd>';
-        });
-        h += '</dl>';
-      }
-      if (r.note) h += '<div class="chk-note">' + esc(r.note) + '</div>';
-      h += '</div></div>';
-    });
-    host.innerHTML = h + '</div>';
+    return sec(4, 'NOTAM', right, html || '<p class="none">אין NOTAMים להצגה</p>', 'sec-notam');
   }
 
   function card(r) {
     var v = r.valid;
     var dates = v
       ? fmt(v.from) + '  →  ' + (v.perm ? 'PERM' : fmt(v.to)) + (v.est ? ' EST' : '')
-      : '<span class="exp">לא זוהה טווח תוקף — קרא את המקור</span>';
-    var gist = gistOf(r.body);
-    // only offer "expand" when the full text actually says more than the gist
-    var flat = r.body.replace(/\s+/g, ' ').trim();
-    var hasMore = flat.length > gist.replace(/\s+/g, ' ').trim().length + 2;
-    return '<div class="card t' + r.tier + (hasMore ? '' : ' flat') + '">' +
+      : 'טווח תוקף לא זוהה';
+    var p = window.NotamPlain.plain(r, S.icaos);
+    return '<div class="card t' + r.tier + '">' +
       '<div class="chead">' +
         '<span class="tag">' + esc(r.tag) + '</span>' +
         (r.isNew ? '<span class="badge-new">חדש</span>' : '') +
         '<span class="nid">' + esc(r.id) + '</span>' +
-        '<span class="spc"></span>' +
-        (hasMore ? '<span class="chev">▾</span>' : '') +
       '</div>' +
-      '<div class="gist">' + esc(gist) + '</div>' +
-      '<div class="dates">' + dates + '</div>' +
-      (hasMore ? '<div class="raw">' + esc(r.body) + '</div>' : '') +
+      (p.headline ? '<div class="nhead">' + esc(p.headline) + '</div>' : '') +
+      '<div class="gist">' + esc(p.body) + '</div>' +
+      '<div class="dates">' + esc(dates) + '</div>' +
+      '<button class="rawbtn" type="button">הצג NOTAM מקורי</button>' +
+      '<div class="raw">' + esc(r.body) + '</div>' +
     '</div>';
+  }
+
+  function bindToggles() {
+    [].forEach.call($('brief').querySelectorAll('.rawbtn'), function (b) {
+      b.onclick = function () {
+        var card = b.parentNode;
+        var open = card.classList.toggle('open');
+        b.textContent = open ? 'הסתר מקור' : 'הצג NOTAM מקורי';
+      };
+    });
   }
 
   if ('serviceWorker' in navigator) {

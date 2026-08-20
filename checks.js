@@ -173,7 +173,8 @@
     var LABEL = { ws: 'SIGMET', tc: 'ציקלון טרופי', va: 'אפר וולקני' };
     return R('sigmet', 'SIGMET', 'warn', w.sigmets.length + ' התרעות פעילות',
       w.sigmets.map(function (s) {
-        return { k: (LABEL[s.kind] || s.kind) + ' · ' + s.fir, v: s.text };
+        var brief = (root.Wx && root.Wx.sigmetSummary) ? root.Wx.sigmetSummary(s.text) : s.text;
+        return { k: (LABEL[s.kind] || s.kind) + ' · ' + s.fir, v: brief, raw: s.text };
       }));
   });
 
