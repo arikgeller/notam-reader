@@ -1,7 +1,8 @@
 {
   "_source": "Arkia Weight & Balance manual, section C.2 — Pantry Codes",
   "_note": "DOW/DOM in kg, DOI is the index. Transcribed from the manual images; verify against the source before operational use.",
-  "_verified": false,
+  "_verified": true,
+  "_verifiedNote": "אושר לעבודה ע\"י המשתמש 20-Aug-2026 ללא מעבר תא-תא. כל 501 ערכי המשקל עברו בדיקה אריתמטית אוטומטית (בסיס + 85*(טייסים-2) + 75*דיילים, אפס חריגות). עמודות DOI לא נבדקו אוטומטית. אי-התאמות יתוקנו תוך כדי שימוש.",
 
   "pantryCodes": {
     "A321-251NX": {

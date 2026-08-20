@@ -1,12 +1,13 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '2.0';
+  var APP_VERSION = '2.1';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
 
-  var S = { pages: null, parsed: null, flightIdx: -1, newDays: 14, showInfo: false, showFir: false };
+  var S = { pages: null, parsed: null, ofp: null, ref: {}, flightIdx: -1,
+           newDays: 14, showInfo: false, showFir: false };
 
   var $ = function (id) { return document.getElementById(id); };
   var drop = $('drop'), dz = $('dz'), fileIn = $('file'), err = $('err');
@@ -37,6 +38,10 @@
       : new Promise(function (r) { window.addEventListener('pdfjs-ready', r, { once: true }); });
   }
 
+  // reference tables ride along with the app; failure here must not block parsing
+  var refReady = fetch('data/dow.json').then(function (r) { return r.json(); })
+    .then(function (j) { S.ref.dow = j; }).catch(function () { S.ref.dow = null; });
+
   async function load(file) {
     err.textContent = '';
     dz.classList.add('busy');
@@ -49,7 +54,9 @@
         dzTitle.textContent = 'קורא עמוד ' + i + ' מתוך ' + n + '…';
         dzSub.textContent = Math.round(i / n * 100) + '%';
       });
+      await refReady;
       S.parsed = window.NotamParser.parse(S.pages);
+      S.ofp = window.OfpData.parse(S.pages);
       if (S.parsed.error) throw new Error(S.parsed.error);
       if (!S.parsed.notams.length) throw new Error('נמצא מקטע NOTAM אך לא זוהו הודעות בתוכו');
       S.flightIdx = S.parsed.flights.length ? 0 : -1;
@@ -163,6 +170,8 @@
       now: w0 || new Date(), showInfo: S.showInfo, showFir: S.showFir
     });
 
+    renderBrief(fl.length ? (S.flightIdx >= 0 ? fl[S.flightIdx] : null) : null);
+
     var vis = rows.filter(function (r) { return r.visible; });
     var c = { 1: 0, 2: 0, 3: 0, n: 0 };
     vis.forEach(function (r) { c[r.tier]++; if (r.isNew) c.n++; });
@@ -228,6 +237,52 @@
     return String(s).replace(/[&<>"]/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
     });
+  }
+
+  var STATUS_ORDER = { fail: 0, warn: 1, info: 2, ok: 3, skip: 4 };
+
+  function renderBrief(flight) {
+    var host = $('brief');
+    if (!S.ofp || !S.ofp.legs.length) { host.innerHTML = ''; return; }
+
+    // match the OFP leg to the flight selected above; fall back to the first
+    var leg = null;
+    if (flight) leg = S.ofp.legs.find(function (l) { return l.flightNo === flight.number; });
+    if (!leg) leg = S.ofp.legs[0];
+
+    var res = window.Checks.run(leg, S.ref);
+    res.sort(function (a, b) { return STATUS_ORDER[a.status] - STATUS_ORDER[b.status]; });
+
+    var counts = { fail: 0, warn: 0 };
+    res.forEach(function (r) { if (counts[r.status] !== undefined) counts[r.status]++; });
+    var sub = counts.fail ? counts.fail + ' דורש טיפול'
+            : counts.warn ? counts.warn + ' לתשומת לב'
+            : 'לא נמצאו חריגות';
+
+    var h = '<div class="brief"><div class="brief-h">' +
+      '<span class="ava">' +
+        '<svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#58a6ff" ' +
+        'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M12 3a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V7a4 4 0 0 1 4-4Z"/>' +
+        '<path d="M5 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1"/></svg></span>' +
+      '<span><b>תדריך</b><br><span class="sub">' + esc(leg.flightNo + ' · ' + leg.dep + '→' + leg.dest +
+        ' · ' + (leg.acType || '') + ' ' + (leg.reg || '') + ' · ' + sub) + '</span></span></div>';
+
+    res.forEach(function (r) {
+      h += '<div class="chk s-' + r.status + '"><span class="dot"></span><div class="chk-b">' +
+        '<div class="chk-t">' + esc(r.title) + '</div>' +
+        '<div class="chk-h">' + esc(r.headline) + '</div>';
+      if (r.detail && r.detail.length) {
+        h += '<dl class="chk-d">';
+        r.detail.forEach(function (d) {
+          h += '<dt>' + esc(d.k) + '</dt><dd>' + esc(d.v) + '</dd>';
+        });
+        h += '</dl>';
+      }
+      if (r.note) h += '<div class="chk-note">' + esc(r.note) + '</div>';
+      h += '</div></div>';
+    });
+    host.innerHTML = h + '</div>';
   }
 
   function card(r) {
