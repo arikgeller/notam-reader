@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '3.0';
+  var APP_VERSION = '3.1';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -202,8 +202,16 @@
     P.notams.forEach(function (n) { if (n.station) S.icaos[n.station.icao] = 1; });
     if (leg) { S.icaos[leg.dep] = 1; S.icaos[leg.dest] = 1; if (leg.altn) S.icaos[leg.altn] = 1; }
 
+    // Park the live filter controls outside #brief before wiping it, otherwise
+    // innerHTML destroys the element and its listeners along with it.
+    var ctl = $('notamCtl');
+    if (ctl) $('notamCtlHome').appendChild(ctl);
+
     $('brief').innerHTML =
       secPlan(leg, res) + secDispatch(leg, res) + secWx(leg, res) + secNotam(vis, rows, res);
+
+    var slot = $('notamCtlSlot');
+    if (slot && ctl) { ctl.hidden = false; slot.parentNode.replaceChild(ctl, slot); }
 
     bindToggles();
   }
@@ -378,7 +386,9 @@
       else html += '<div class="empty">אין NOTAM להצגה</div>';
       html += '</div>';
     });
-    return sec(4, 'NOTAM', right, html || '<p class="none">אין NOTAMים להצגה</p>', 'sec-notam');
+    return sec(4, 'NOTAM', right,
+      '<div id="notamCtlSlot"></div>' + (html || '<p class="none">אין NOTAMים להצגה</p>'),
+      'sec-notam');
   }
 
   function card(r) {

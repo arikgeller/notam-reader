@@ -146,6 +146,8 @@ button:active{transform:scale(.97)}
   font-size:12px;line-height:1.5;color:#c9d5e1}
 
 /* ---- station groups ---- */.sec-notam{padding-bottom:6px}
+.notam-bar{margin:0;border:0;border-bottom:1px solid var(--line);border-radius:0;
+  background:#141a22;padding:11px 14px}
 .grp{margin:0}
 .grp-h{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
   padding:10px 14px;background:var(--panel2);border-top:1px solid var(--line)}
@@ -257,7 +259,10 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:34px 0 24px}
       <span class="flight" id="fInfo"></span>
     </div>
 
-    <div class="bar">
+    <div id="brief"></div>
+
+    <div id="notamCtlHome" hidden></div>
+    <div class="bar notam-bar" id="notamCtl" hidden>
       <span class="lbl">חדש מ‑</span>
       <span class="seg" id="segNew">
         <button data-d="7">7 ימים</button>
@@ -275,8 +280,6 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:34px 0 24px}
         <button data-v="0" aria-pressed="true">מוסתר</button>
       </span>
     </div>
-
-    <div id="brief"></div>
   </div>
 
   <footer id="foot"></footer>
