@@ -17,7 +17,7 @@
 
   /* ---------- 1. DOW against the weight & balance tables ---------- */
 
-  define('dow', 'משקל ריק תפעולי (DOW)', function (leg, ref) {
+  define('dow', 'משקל ריק תפעולי (DOW)', function (leg, ref, over) {
     // A missing input is itself a finding: without it the DOW cannot be verified,
     // so warn rather than skip quietly.
     var data = ref && ref.dow;
@@ -30,14 +30,19 @@
       [{ k: 'רישום ב-OFP', v: reg || '—' },
        { k: 'רישומים בטבלה', v: Object.keys(data.dow).join(', ') }]);
 
-    var crew = leg.briefing && leg.briefing.crew;
+    // Crew comes from Dispatch Briefing Info. When the OFP omits it the pilot may
+    // pick it by hand; the result then says so, because it rests on that input.
+    var crewFromOfp = leg.briefing && leg.briefing.crew;
+    var crew = crewFromOfp || (over && over.crew) || null;
+    var manual = !crewFromOfp && !!crew;
     if (!crew) return R('dow', 'DOW', 'warn',
       'לא ניתן לבדוק DOW — הרכב הצוות חסר',
       [{ k: 'מקור הנתון', v: 'Dispatch Briefing Info' },
        { k: 'מטוס', v: reg || '—' },
        { k: 'DOW ב-OFP', v: (leg.dow && leg.dow.est ? leg.dow.est + ' kg' : 'לא נמצא') }],
       { note: 'שורת CREW אינה מופיעה בעמוד Dispatch Briefing Info של רגל זו. ' +
-              'בלעדיה אי אפשר לבחור שורה בטבלת המשקל — בדוק ידנית מול ה-OFP.' });
+              'בחר את הרכב הצוות כדי לבדוק, או בדוק ידנית מול ה-OFP.',
+        needCrew: true });
 
     var ofpDow = leg.dow && leg.dow.est;
     if (!ofpDow) return R('dow', 'DOW', 'warn', 'לא ניתן לבדוק DOW — הערך לא נמצא ב-OFP',
@@ -83,7 +88,7 @@
 
     var detail = [
       { k: 'ב-OFP', v: ofpDow + ' kg' },
-      { k: 'מטוס / צוות', v: reg + ' · ' + crew },
+      { k: 'מטוס / צוות', v: reg + ' · ' + crew + (manual ? '  (נבחר ידנית)' : '') },
       { k: 'יעד', v: leg.dest + (destIata ? ' / ' + destIata : '') }
     ];
     if (expectedCode) detail.push({ k: 'קוד pantry לפי היעד', v: expectedCode });
@@ -91,20 +96,27 @@
 
     if (!stdRow) {
       return R('dow', 'DOW', 'warn',
-        'לא ניתן לבדוק DOW — אין שורה להרכב צוות ' + crew + ' בטבלת ' + reg, detail,
-        { note: 'הרכבי הצוות שקיימים בטבלה: ' + Object.keys(std ? std.rows : {}).join(', ') });
+        'אין שורה להרכב צוות ' + crew + ' בטבלת ' + reg, detail,
+        { needCrew: true, manualCrew: manual ? crew : null,
+          note: 'הרכבי הצוות שקיימים בטבלה: ' + Object.keys(std ? std.rows : {}).join(', ') });
     }
     if (!expectedCode) {
       if (matches.length) {
         return R('dow', 'DOW', 'warn',
           'היעד ' + (destIata || leg.dest) + ' לא מופיע באף קוד pantry, אבל ה-DOW תואם לקוד ' +
           matches.map(function (m) { return m.code + (m.variant === 'STANDARD' ? '' : '/' + m.variant); }).join(' או '),
-          detail);
+          detail, { manualCrew: manual ? crew : null });
       }
-      return R('dow', 'DOW', 'warn', 'היעד ' + (destIata || leg.dest) + ' לא מופיע באף קוד pantry — לא ניתן לגזור DOW צפוי', detail);
+      return R('dow', 'DOW', 'warn',
+        'היעד ' + (destIata || leg.dest) + ' לא מופיע באף קוד pantry — לא ניתן לגזור DOW צפוי',
+        detail, { manualCrew: manual ? crew : null });
     }
     if (expectedDow === ofpDow) {
-      return R('dow', 'DOW', 'ok', 'תואם — ' + ofpDow + ' kg, קוד ' + expectedCode + ', צוות ' + crew, detail);
+      return R('dow', 'DOW', 'ok',
+        'תואם — ' + ofpDow + ' kg, קוד ' + expectedCode + ', צוות ' + crew, detail,
+        manual ? { manualCrew: crew,
+                   note: 'הרכב הצוות נבחר ידנית ואינו מופיע ב-OFP. הבדיקה תקפה רק אם הבחירה נכונה.' }
+               : null);
     }
     // Mismatch. The registration + crew row is what governs, so show that whole
     // row: the wrongly-taken column then stands out at a glance.
@@ -122,7 +134,9 @@
       : 'הערך שב-OFP לא תואם לאף קוד בשורת ' + crew + ' של ' + reg + '.';
     return R('dow', 'DOW', 'fail',
       'DOW שגוי בתוכנית הטיסה — צריך להיות ' + expectedDow + ' kg, בפועל ' + ofpDow + ' kg',
-      detail, { note: alt + ' הקובע הוא הרישום ' + reg + ' והרכב הצוות ' + crew + '.' });
+      detail, { manualCrew: manual ? crew : null,
+                note: alt + ' הקובע הוא הרישום ' + reg + ' והרכב הצוות ' + crew + '.' +
+                      (manual ? ' הרכב הצוות נבחר ידנית ואינו מופיע ב-OFP.' : '') });
   });
 
   /* ---------- 2. weight margins ---------- */
@@ -299,9 +313,9 @@
 
   /* ---------- runner ---------- */
 
-  function run(leg, ref) {
+  function run(leg, ref, over) {
     return CHECKS.map(function (c) {
-      try { return c.fn(leg, ref) || R(c.id, c.title, 'skip', 'הבדיקה לא החזירה תוצאה'); }
+      try { return c.fn(leg, ref, over) || R(c.id, c.title, 'skip', 'הבדיקה לא החזירה תוצאה'); }
       catch (e) { return R(c.id, c.title, 'skip', 'שגיאה בבדיקה: ' + (e && e.message)); }
     }).map(function (r, i) { r.title = CHECKS[i].title; return r; });
   }

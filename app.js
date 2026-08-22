@@ -1,13 +1,13 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '3.1';
+  var APP_VERSION = '3.2';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
 
   var S = { pages: null, parsed: null, ofp: null, ref: {}, flightIdx: -1,
-           newDays: 14, showInfo: false, showFir: false };
+           newDays: 14, showInfo: false, showFir: false, crew: {} };
 
   var $ = function (id) { return document.getElementById(id); };
   var drop = $('drop'), dz = $('dz'), fileIn = $('file'), err = $('err');
@@ -189,7 +189,7 @@
       if (flight) leg = S.ofp.legs.filter(function (l) { return l.flightNo === flight.number; })[0];
       if (!leg) leg = S.ofp.legs[0];
     }
-    var res = leg ? window.Checks.run(leg, S.ref) : [];
+    var res = leg ? window.Checks.run(leg, S.ref, { crew: leg && S.crew[leg.flightNo] }) : [];
 
     var rows = window.NotamParser.filter(P.notams, {
       windowFrom: w0, windowTo: w1, newDays: S.newDays,
@@ -214,6 +214,7 @@
     if (slot && ctl) { ctl.hidden = false; slot.parentNode.replaceChild(ctl, slot); }
 
     bindToggles();
+    bindPicker();
   }
 
   /* ---------- 1. flight plan ---------- */
@@ -252,8 +253,116 @@
     ];
     var body = facts(rowsF);
     if (dow && dow.status !== 'ok') body += alertLine(dow) + detailBox(dow);
+    if (dow && dow.needCrew) body += crewPicker(leg, dow);
+    else if (dow && dow.manualCrew) body += crewChosen(leg, dow.manualCrew);
     fuelChecks.forEach(function (c) { body += alertLine(c) + detailBox(c); });
     return sec(1, 'תוכנית הטיסה', leg.flightNo, body);
+  }
+
+  /* ---------- crew picker ---------- */
+  // Two wheels, as specified: flight crew 2-4, cabin crew 5-10.
+
+  var FLT_OPTS = [2, 3, 4];
+  var CAB_OPTS = [5, 6, 7, 8, 9, 10];
+  var WHEEL_H = 44;
+
+  function wheel(id, opts, sel) {
+    var items = opts.map(function (o) {
+      return '<div class="it' + (o === sel ? ' on' : '') + '" data-v="' + o + '">' + o + '</div>';
+    }).join('');
+    return '<div class="wheel" id="' + id + '" data-sel="' + (sel === null ? '' : sel) + '">' +
+      '<div class="sp"></div>' + items + '<div class="sp"></div></div>';
+  }
+
+  function crewPicker(leg, chk) {
+    var cur = S.crew[leg.flightNo] || '';
+    // A wheel always has a value under the band, so seed the selection with it —
+    // an apparently-centred number that counts as "nothing chosen" is a trap.
+    var parts = cur.split('/');
+    var f = parts[0] ? +parts[0] : FLT_OPTS[0];
+    var c = (parts[1] !== undefined && parts[1] !== '') ? +parts[1] : CAB_OPTS[0];
+    return '<div class="picker" data-leg="' + esc(leg.flightNo) + '">' +
+      '<div class="pk-h">בחר הרכב צוות</div>' +
+      '<div class="wheels">' +
+        '<div class="wcol"><span class="wl">טייסים</span>' + wheel('wFlt', FLT_OPTS, f) + '</div>' +
+        '<span class="wsep">/</span>' +
+        '<div class="wcol"><span class="wl">דיילים</span>' + wheel('wCab', CAB_OPTS, c) + '</div>' +
+        '<div class="band"></div>' +
+      '</div>' +
+      '<div class="pk-f"><span class="pk-v" id="pkVal">' + (cur || (f + '/' + c)) + '</span>' +
+      '<button type="button" class="btn-primary" id="pkGo">בדוק</button>' +
+      (cur ? '<button type="button" class="pk-clr" id="pkClr">נקה</button>' : '') + '</div></div>';
+  }
+
+  function crewChosen(leg, crew) {
+    return '<div class="chosen">הרכב צוות <b>' + esc(crew) + '</b> נבחר ידנית — לא מופיע ב-OFP' +
+      '<button type="button" class="pk-clr" id="pkClr">שנה</button></div>';
+  }
+
+  function bindPicker() {
+    var box = $('brief').querySelector('.picker');
+    var clr = $('pkClr');
+    if (clr) clr.onclick = function () {
+      var leg = currentLeg(); if (leg) { delete S.crew[leg.flightNo]; render(); }
+    };
+    if (!box) return;
+
+    var legNo = box.getAttribute('data-leg');
+    var wf = $('wFlt'), wc = $('wCab');
+
+    function centre(w, opts) {
+      var sel = w.getAttribute('data-sel');
+      if (sel === '') return;
+      var i = opts.indexOf(+sel);
+      if (i >= 0) w.scrollTop = i * WHEEL_H;
+    }
+    function readout(w, opts) {
+      var i = Math.round(w.scrollTop / WHEEL_H);
+      i = Math.max(0, Math.min(opts.length - 1, i));
+      var v = opts[i];
+      w.setAttribute('data-sel', v);
+      [].forEach.call(w.querySelectorAll('.it'), function (el) {
+        el.classList.toggle('on', +el.getAttribute('data-v') === v);
+      });
+      return v;
+    }
+    function sync() {
+      var a = wf.getAttribute('data-sel'), b = wc.getAttribute('data-sel');
+      var ok = a !== '' && b !== '';
+      $('pkVal').textContent = ok ? a + '/' + b : '—';
+      $('pkGo').disabled = !ok;
+    }
+    var t1, t2;
+    wf.addEventListener('scroll', function () {
+      clearTimeout(t1); t1 = setTimeout(function () { readout(wf, FLT_OPTS); sync(); }, 90);
+    });
+    wc.addEventListener('scroll', function () {
+      clearTimeout(t2); t2 = setTimeout(function () { readout(wc, CAB_OPTS); sync(); }, 90);
+    });
+    // tapping a value is quicker than scrolling to it
+    [[wf, FLT_OPTS], [wc, CAB_OPTS]].forEach(function (pair) {
+      pair[0].addEventListener('click', function (ev) {
+        var it = ev.target.closest('.it'); if (!it) return;
+        pair[0].scrollTo({ top: pair[1].indexOf(+it.getAttribute('data-v')) * WHEEL_H,
+                           behavior: 'smooth' });
+      });
+    });
+    centre(wf, FLT_OPTS); centre(wc, CAB_OPTS); sync();
+
+    $('pkGo').onclick = function () {
+      var a = wf.getAttribute('data-sel'), b = wc.getAttribute('data-sel');
+      if (a === '' || b === '') return;
+      S.crew[legNo] = a + '/' + b;
+      render();
+    };
+  }
+
+  function currentLeg() {
+    if (!S.ofp || !S.ofp.legs.length) return null;
+    var fl = S.parsed.flights;
+    var flight = (S.flightIdx >= 0 && fl[S.flightIdx]) ? fl[S.flightIdx] : null;
+    var leg = flight && S.ofp.legs.filter(function (l) { return l.flightNo === flight.number; })[0];
+    return leg || S.ofp.legs[0];
   }
 
   function detailBox(chk) {
