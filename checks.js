@@ -57,13 +57,26 @@
         return false;
       });
     }
+    function codeFor(iata) {
+      var hit = null;
+      if (pcTable && iata) {
+        pcTable.codes.some(function (c) {
+          if (c.dest && c.dest.indexOf(iata) >= 0) { hit = c.code; return true; }
+          return false;
+        });
+      }
+      return hit;
+    }
+    // The pantry code belongs to the away station. On a leg back to base the
+    // destination is home and appears in no code list, so the code is the one
+    // of the outbound leg — read it off the departure airport instead.
     var destIata = leg.destIata;
-    var expectedCode = null;
-    if (pcTable && destIata) {
-      pcTable.codes.some(function (c) {
-        if (c.dest && c.dest.indexOf(destIata) >= 0) { expectedCode = c.code; return true; }
-        return false;
-      });
+    var codeAirport = destIata, inbound = false;
+    var expectedCode = codeFor(destIata);
+    if (!expectedCode && leg.depIata && codeFor(leg.depIata)) {
+      expectedCode = codeFor(leg.depIata);
+      codeAirport = leg.depIata;
+      inbound = true;
     }
 
     // every (variant, code) whose table value equals the OFP figure
@@ -91,7 +104,9 @@
       { k: 'מטוס / צוות', v: reg + ' · ' + crew + (manual ? '  (נבחר ידנית)' : '') },
       { k: 'יעד', v: leg.dest + (destIata ? ' / ' + destIata : '') }
     ];
-    if (expectedCode) detail.push({ k: 'קוד pantry לפי היעד', v: expectedCode });
+    if (expectedCode) detail.push({
+      k: inbound ? 'קוד pantry לפי שדה המוצא' : 'קוד pantry לפי היעד',
+      v: expectedCode + ' (' + codeAirport + ')' + (inbound ? '  — רגל חזרה לבסיס' : '') });
     if (expectedDow) detail.push({ k: 'לפי הטבלה (STANDARD)', v: expectedDow + ' kg · DOI ' + expectedDoi });
 
     if (!stdRow) {
@@ -108,7 +123,8 @@
           detail, { manualCrew: manual ? crew : null });
       }
       return R('dow', 'DOW', 'warn',
-        'היעד ' + (destIata || leg.dest) + ' לא מופיע באף קוד pantry — לא ניתן לגזור DOW צפוי',
+        'לא ניתן לגזור קוד pantry — ' + (destIata || leg.dest) + ' ו-' +
+        (leg.depIata || leg.dep) + ' אינם מופיעים באף קוד',
         detail, { manualCrew: manual ? crew : null });
     }
     if (expectedDow === ofpDow) {
@@ -127,10 +143,13 @@
       return c + '=' + w + mark;
     }).join('   ') });
 
+    var because = inbound
+      ? 'אבל הנתיב מול ' + codeAirport + ' מחייב קוד ' + expectedCode + ' (רגל חזרה לבסיס)'
+      : 'אבל היעד ' + codeAirport + ' מחייב קוד ' + expectedCode;
     var alt = matches.length
       ? 'הערך שב-OFP תואם לקוד ' + matches.map(function (m) {
           return m.code + (m.variant === 'STANDARD' ? '' : ' (' + m.variant + ')'); }).join(' / ') +
-        ', אבל היעד ' + (destIata || leg.dest) + ' מחייב קוד ' + expectedCode + '.'
+        ', ' + because + '.'
       : 'הערך שב-OFP לא תואם לאף קוד בשורת ' + crew + ' של ' + reg + '.';
     return R('dow', 'DOW', 'fail',
       'DOW שגוי בתוכנית הטיסה — צריך להיות ' + expectedDow + ' kg, בפועל ' + ofpDow + ' kg',
