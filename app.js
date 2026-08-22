@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '3.5';
+  var APP_VERSION = '3.6';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -250,7 +250,17 @@
       ['DOW', (leg.dow && leg.dow.est ? leg.dow.est + ' kg' : '—'),
         dow && dow.status === 'fail' ? 'bad' : '']
     ];
-    var body = facts(rowsF) + fuelTable(leg, fuelChecks.length > 0);
+    // Same three fuel figures as before — one per line rather than run together.
+    var bad = fuelChecks.length ? 'bad' : '';
+    function fq(x) {
+      if (!x) return '—';
+      return x.kg.toLocaleString('en-US') + ' kg' + (x.min !== null && x.min !== undefined
+        ? '   ' + mins(x.min) : '');
+    }
+    rowsF.push(['דלק', fq(f.total), bad]);
+    rowsF.push(['TRIP', fq(f.trip), bad]);
+    rowsF.push(['EXTRA', fq(f.extra), bad]);
+    var body = facts(rowsF);
     if (dow && dow.status !== 'ok') body += alertLine(dow) + detailBox(dow);
     if (dow && dow.needCrew) body += crewPicker(leg, dow);
     else if (dow && dow.manualCrew) body += crewChosen(leg, dow.manualCrew);
@@ -368,43 +378,6 @@
     if (m === null || m === undefined) return '';
     var h = Math.floor(m / 60), r = m % 60;
     return h + ':' + (r < 10 ? '0' : '') + r;
-  }
-
-  // One figure per line: the fuel block is the part a pilot re-reads, and a
-  // single run-on line hides which number is which. Fixed grid columns, so the
-  // digits line up and the emphasised totals cannot push anything out of place.
-  function fuelTable(leg, flagged) {
-    var f = leg.fuel || {};
-    var rows = [
-      ['TRIP',     f.trip,     f.trip && f.trip.to ? f.trip.to : null, false],
-      ['CONT',     f.contgcy,  f.contgcy && f.contgcy.basis ? f.contgcy.basis : null, false],
-      ['MLF',      f.mlf,      'final reserve', false],
-      ['ALTN',     f.altn,     f.altn && f.altn.to ? f.altn.to : null, false],
-      ['REQUIRED', f.required, null, true],
-      ['EXTRA',    f.extra,    null, false],
-      ['TAKEOFF',  f.takeoff,  null, true],
-      ['TAXI',     f.taxi,     null, false],
-      ['TOTAL',    f.total,    null, true]
-    ].filter(function (r) { return r[1]; });
-    if (!rows.length) return '';
-
-    function row(label, kg, tm, note, cls) {
-      return '<div class="fr' + (cls ? ' ' + cls : '') + '">' +
-        '<span class="l">' + esc(label) + '</span>' +
-        '<span class="v">' + kg.toLocaleString('en-US') + '</span>' +
-        '<span class="u">kg</span>' +
-        '<span class="t">' + esc(tm || '') + '</span>' +
-        '<span class="n">' + esc(note || '') + '</span></div>';
-    }
-
-    var html = '<div class="fuel' + (flagged ? ' flagged' : '') + '">' +
-      '<div class="fuel-h">דלק</div>';
-    rows.forEach(function (r) {
-      var note = (r[2] || '') + (r[1].nm ? (r[2] ? ' · ' : '') + r[1].nm + ' NM' : '');
-      html += row(r[0], r[1].kg, mins(r[1].min), note, r[3] ? 'sum' : '');
-    });
-    if (leg.minDivFuel) html += row('MIN DIV', leg.minDivFuel, '', '', 'div');
-    return html + '</div>';
   }
 
   function detailBox(chk) {
