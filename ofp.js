@@ -55,6 +55,8 @@
     r.tropo = grab(/TROPO\s+(\d+)/, text, num);
     r.avWind= grab(/AV WIND\s+([+-]\d+)/, text, num);
     r.avgFF = grab(/AVG FF KG\/H\s+(\d+)/, text, num);
+    // RMF — remaining fuel on board at destination (take-off fuel minus trip)
+    r.rmf   = grab(/\bRMF\s+(\d[\d,]*)/, text, num);
 
     // weights: "DOW   52394" / "ZFW   71594 75600" (est, max)
     ['DOW','PYLD','ZFW','TOF','TOW','LDW','ULD'].forEach(function (k) {

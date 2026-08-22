@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '3.6';
+  var APP_VERSION = '3.7';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -260,6 +260,8 @@
     rowsF.push(['דלק', fq(f.total), bad]);
     rowsF.push(['TRIP', fq(f.trip), bad]);
     rowsF.push(['EXTRA', fq(f.extra), bad]);
+    rowsF.push(['MIN DIV', leg.minDivFuel ? leg.minDivFuel.toLocaleString('en-US') + ' kg' : '—']);
+    rowsF.push(['REMAINING', leg.rmf ? leg.rmf.toLocaleString('en-US') + ' kg' : '—']);
     var body = facts(rowsF);
     if (dow && dow.status !== 'ok') body += alertLine(dow) + detailBox(dow);
     if (dow && dow.needCrew) body += crewPicker(leg, dow);
