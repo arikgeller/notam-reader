@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '3.4';
+  var APP_VERSION = '3.5';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -248,12 +248,9 @@
       ['מטוס', (leg.reg || '—') + '   ' + (leg.acType || '')],
       ['STD', (leg.std ? leg.std + 'Z' : '—') + (leg.sta ? '   STA ' + leg.sta + 'Z' : '')],
       ['DOW', (leg.dow && leg.dow.est ? leg.dow.est + ' kg' : '—'),
-        dow && dow.status === 'fail' ? 'bad' : ''],
-      ['דלק', (f.total ? f.total.kg + ' kg' : '—') +
-        (f.trip ? '   TRIP ' + f.trip.kg : '') + (f.extra ? '   EXTRA ' + f.extra.kg : ''),
-        fuelChecks.length ? 'bad' : '']
+        dow && dow.status === 'fail' ? 'bad' : '']
     ];
-    var body = facts(rowsF);
+    var body = facts(rowsF) + fuelTable(leg, fuelChecks.length > 0);
     if (dow && dow.status !== 'ok') body += alertLine(dow) + detailBox(dow);
     if (dow && dow.needCrew) body += crewPicker(leg, dow);
     else if (dow && dow.manualCrew) body += crewChosen(leg, dow.manualCrew);
@@ -367,6 +364,49 @@
     return leg || S.ofp.legs[0];
   }
 
+  function mins(m) {
+    if (m === null || m === undefined) return '';
+    var h = Math.floor(m / 60), r = m % 60;
+    return h + ':' + (r < 10 ? '0' : '') + r;
+  }
+
+  // One figure per line: the fuel block is the part a pilot re-reads, and a
+  // single run-on line hides which number is which. Fixed grid columns, so the
+  // digits line up and the emphasised totals cannot push anything out of place.
+  function fuelTable(leg, flagged) {
+    var f = leg.fuel || {};
+    var rows = [
+      ['TRIP',     f.trip,     f.trip && f.trip.to ? f.trip.to : null, false],
+      ['CONT',     f.contgcy,  f.contgcy && f.contgcy.basis ? f.contgcy.basis : null, false],
+      ['MLF',      f.mlf,      'final reserve', false],
+      ['ALTN',     f.altn,     f.altn && f.altn.to ? f.altn.to : null, false],
+      ['REQUIRED', f.required, null, true],
+      ['EXTRA',    f.extra,    null, false],
+      ['TAKEOFF',  f.takeoff,  null, true],
+      ['TAXI',     f.taxi,     null, false],
+      ['TOTAL',    f.total,    null, true]
+    ].filter(function (r) { return r[1]; });
+    if (!rows.length) return '';
+
+    function row(label, kg, tm, note, cls) {
+      return '<div class="fr' + (cls ? ' ' + cls : '') + '">' +
+        '<span class="l">' + esc(label) + '</span>' +
+        '<span class="v">' + kg.toLocaleString('en-US') + '</span>' +
+        '<span class="u">kg</span>' +
+        '<span class="t">' + esc(tm || '') + '</span>' +
+        '<span class="n">' + esc(note || '') + '</span></div>';
+    }
+
+    var html = '<div class="fuel' + (flagged ? ' flagged' : '') + '">' +
+      '<div class="fuel-h">דלק</div>';
+    rows.forEach(function (r) {
+      var note = (r[2] || '') + (r[1].nm ? (r[2] ? ' · ' : '') + r[1].nm + ' NM' : '');
+      html += row(r[0], r[1].kg, mins(r[1].min), note, r[3] ? 'sum' : '');
+    });
+    if (leg.minDivFuel) html += row('MIN DIV', leg.minDivFuel, '', '', 'div');
+    return html + '</div>';
+  }
+
   function detailBox(chk) {
     if (!chk.detail || !chk.detail.length) return chk.note ? '<p class="hint">' + esc(chk.note) + '</p>' : '';
     return '<details class="more-d"><summary>פרטים</summary>' +
@@ -434,17 +474,23 @@
         esc(st.rawMetar.concat(st.rawTaf).join('\n')) + '</pre></details>';
     });
 
+    // The route gets a line either way — silence must not read as "not checked".
     var sig = findCheck(res, 'sigmet');
+    var sigHead = '<div class="wx-st"><span class="wx-i">בנתיב</span><span class="wx-r">SIGMET</span>';
     if (sig && sig.status === 'warn') {
       anything = true;
-      body += '<div class="wx-st"><span class="wx-i">בנתיב</span><span class="wx-r">SIGMET</span></div><ul class="wx-l">';
+      body += sigHead + '</div><ul class="wx-l">';
       sig.detail.forEach(function (d) {
         body += '<li><span class="wx-tag">' + esc(d.k.split(' · ')[0]) + '</span>' +
                 esc(d.k.split(' · ')[1] || '') + ' — ' + esc(d.v.slice(0, 180)) + '</li>';
       });
       body += '</ul>';
+    } else if (sig && sig.status === 'ok') {
+      body += sigHead + '<span class="wx-ok">אין SIGMET פעיל</span></div>';
+    } else {
+      body += sigHead + '<span class="wx-na">' + esc(sig ? sig.headline : 'לא נבדק') + '</span></div>';
     }
-    if (!anything && !body) body = '<p class="clean">אין חריגים</p>';
+    if (!body) body = '<p class="clean">אין חריגים</p>';
     return sec(3, 'מזג אוויר חריג', 'רוח >15kt · ענן <2000ft · CB/TCU · משקעים · ראות <9999', body);
   }
 
