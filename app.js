@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '3.3';
+  var APP_VERSION = '3.4';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -241,6 +241,8 @@
 
     var f = leg.fuel || {};
     var rowsF = [
+      ['תוכנית טיסה', (leg.flightNo || '—') + (leg.ofpNo !== undefined && leg.ofpNo !== null
+        ? '   OFP ' + leg.ofpNo : '')],
       ['תאריך', leg.dateStr || '—'],
       ['נתיב', leg.dep + ' → ' + leg.dest + (leg.altn ? '   ALTN ' + leg.altn : '')],
       ['מטוס', (leg.reg || '—') + '   ' + (leg.acType || '')],
