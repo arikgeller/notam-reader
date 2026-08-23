@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '3.7';
+  var APP_VERSION = '3.8';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -226,8 +226,11 @@
       inner + '</section>';
   }
 
+  var SEP = '\u0000sep';
+
   function facts(list) {
     return '<dl class="facts">' + list.map(function (f) {
+      if (f[0] === SEP) return '<div class="fsep"></div>';
       return '<dt>' + esc(f[0]) + '</dt><dd' + (f[2] ? ' class="' + f[2] + '"' : '') + '>' +
              esc(f[1]) + '</dd>';
     }).join('') + '</dl>';
@@ -257,6 +260,7 @@
       return x.kg.toLocaleString('en-US') + ' kg' + (x.min !== null && x.min !== undefined
         ? '   ' + mins(x.min) : '');
     }
+    rowsF.push([SEP]);
     rowsF.push(['דלק', fq(f.total), bad]);
     rowsF.push(['TRIP', fq(f.trip), bad]);
     rowsF.push(['EXTRA', fq(f.extra), bad]);
