@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '4.3';
+  var APP_VERSION = '4.5';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -66,7 +66,9 @@
     fetch('data/dow.json').then(function (r) { return r.json(); })
       .then(function (j) { S.ref.dow = j; }).catch(function () { S.ref.dow = null; }),
     fetch('data/limits.json').then(function (r) { return r.json(); })
-      .then(function (j) { S.ref.limits = j; }).catch(function () { S.ref.limits = null; })
+      .then(function (j) { S.ref.limits = j; }).catch(function () { S.ref.limits = null; }),
+    fetch('data/coast.json').then(function (r) { return r.json(); })
+      .then(function (j) { S.ref.coast = j; }).catch(function () { S.ref.coast = null; })
   ]);
 
   async function load(file) {
@@ -84,6 +86,7 @@
       await refReady;
       S.parsed = window.NotamParser.parse(S.pages);
       S.ofp = window.OfpData.parse(S.pages);
+      S.routeAll = S.pages;
       if (S.parsed.error) throw new Error(S.parsed.error);
       if (!S.parsed.notams.length) throw new Error('נמצא מקטע NOTAM אך לא זוהו הודעות בתוכו');
       S.flightIdx = S.parsed.flights.length ? 0 : -1;
@@ -581,8 +584,39 @@
         '<div class="foldbody">' + folded + '</div></div>';
     }
     return sec(4, 'NOTAM', right,
-      '<div id="notamCtlSlot"></div>' + (html || '<p class="none">אין NOTAMים להצגה</p>'),
+      '<div id="notamCtlSlot"></div>' + mapBlock(vis, leg) +
+      (html || '<p class="none">אין NOTAMים להצגה</p>'),
       'sec-notam');
+  }
+
+  // A schematic of the closures that carry coordinates, drawn over the planned
+  // route. Orientation only — it answers "is this on my track", nothing more.
+  function mapBlock(vis, leg) {
+    if (!window.Geo || !S.routeAll) return '';
+    var rt = window.Geo.route(S.routeAll, leg && leg.flightNo);
+    if (rt.length < 2) return '';
+    var areas = window.Geo.closures(vis);
+    if (!areas.length) return '';
+
+    var svg = window.Geo.draw({ route: rt, areas: areas, coast: S.ref.coast,
+                                depName: leg && leg.dep, destName: leg && leg.dest,
+                                width: 700, height: 440 });
+    if (!svg) return '';
+
+    var list = areas.map(function (a) {
+      return '<li><span class="sw t' + a.tier + '"></span><b>' + esc(a.id) + '</b> ' +
+        esc(a.tag) + (a.radiusNm ? ' · רדיוס ' + a.radiusNm + ' NM' : '') +
+        (a.kind === 'polygon' ? ' · ' + a.points.length + ' קודקודים' : '') + '</li>';
+    }).join('');
+
+    return '<div class="mapwrap" data-fold="map">' +
+      '<button type="button" class="foldbtn">מפת אזורים סגורים בנתיב' +
+      '<span class="fbadge">' + areas.length + '</span><span class="fchev">▾</span></button>' +
+      '<div class="mapbody">' + svg +
+      '<ul class="maplist">' + list + '</ul>' +
+      '<p class="mapnote">תרשים סכמטי מנתוני ה-OFP וה-NOTAM בלבד. ' +
+      'קווי החוף כלליים, אין מרחב אווירי ואין גבולות FIR — אינו מפת ניווט.</p>' +
+      '</div></div>';
   }
 
   function card(r) {
