@@ -3,8 +3,8 @@
   "short_name": "FP Reader",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#080b11",
-  "theme_color": "#080b11",
+  "background_color": "#f4f7fa",
+  "theme_color": "#1b2a3a",
   "lang": "he",
   "dir": "rtl",
   "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
