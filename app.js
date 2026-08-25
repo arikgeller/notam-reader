@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '4.1';
+  var APP_VERSION = '4.2';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -10,6 +10,29 @@
            newDays: 14, showInfo: false, showFir: false, crew: {} };
 
   var $ = function (id) { return document.getElementById(id); };
+
+  /* ---------- light / dark ---------- */
+  // Set before first paint by an inline script; here we only wire the switch.
+  var THEME_META = { light: '#1b2a3a', dark: '#0e151e' };
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-theme', t);
+    var m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', THEME_META[t] || THEME_META.light);
+    var b = $('theme');
+    if (b) {
+      b.textContent = t === 'dark' ? '☀' : '☾';
+      b.title = t === 'dark' ? 'מעבר למצב יום' : 'מעבר למצב לילה';
+    }
+  }
+  function currentTheme() {
+    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  }
+  applyTheme(currentTheme());
+  $('theme').onclick = function () {
+    var t = currentTheme() === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('fp-theme', t); } catch (e) {}
+    applyTheme(t);
+  };
   var drop = $('drop'), dz = $('dz'), fileIn = $('file'), err = $('err');
   var dzTitle = dz.querySelector('h2'), dzSub = dz.querySelector('p');
   var DZ_TITLE = dzTitle.textContent, DZ_SUB = dzSub.textContent;
@@ -29,7 +52,7 @@
   $('reset').onclick = function () {
     S.parsed = null; fileIn.value = '';
     $('app').classList.add('hidden'); drop.classList.remove('hidden');
-    $('hdr').classList.add('hidden'); err.textContent = '';
+    $('hdr').classList.add('bare'); err.textContent = '';
     window.scrollTo(0, 0);
   };
 
@@ -66,7 +89,7 @@
       S.flightIdx = S.parsed.flights.length ? 0 : -1;
       drop.classList.add('hidden');
       $('app').classList.remove('hidden');
-      $('hdr').classList.remove('hidden');
+      $('hdr').classList.remove('bare');
       buildFlightSeg();
       render();
     } catch (e) {
