@@ -1,13 +1,13 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '4.6';
+  var APP_VERSION = '4.7';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
 
   var S = { pages: null, parsed: null, ofp: null, ref: {}, flightIdx: -1,
-           newDays: 14, showInfo: false, showFir: false, crew: {} };
+           newDays: 14, showInfo: false, showFir: false, crew: {}, forcePicker: {} };
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -133,7 +133,11 @@
       b.textContent = 'שתיהן'; b.setAttribute('data-i', '-1');
       b.setAttribute('aria-pressed', 'false'); el.appendChild(b);
     }
-    seg(el, function (v) { S.flightIdx = +v; render(); }, 'data-i');
+    seg(el, function (v) {
+      S.flightIdx = +v;
+      S.forcePicker = {};   // leaving a leg closes a picker opened by "שנה"
+      render();
+    }, 'data-i');
   }
 
   /* ---------- formatting ---------- */
@@ -295,8 +299,10 @@
     rowsF.push(['REMAINING', leg.rmf ? leg.rmf.toLocaleString('en-US') + ' kg' : '—']);
     var body = facts(rowsF);
     if (dow && dow.status !== 'ok') body += alertLine(dow) + detailBox(dow);
-    if (dow && dow.needCrew) body += crewPicker(leg, dow);
-    else if (dow && dow.manualCrew) body += crewChosen(leg, dow.manualCrew);
+    if (dow && (dow.needCrew || S.forcePicker[leg.flightNo])) body += crewPicker(leg, dow);
+    else if (dow && dow.crewSource === 'manual') body += crewBanner(dow.manualCrew, 'נבחר ידנית — לא מופיע ב-OFP');
+    else if (dow && dow.crewSource === 'inherited')
+      body += crewBanner(leg.crewInherited.crew, 'נלקח מרגל ' + dow.crewFrom + ' — לא מופיע בתדריך של רגל זו');
     fuelChecks.forEach(function (c) { body += alertLine(c) + detailBox(c); });
     return sec(1, 'תוכנית הטיסה', leg.flightNo, body);
   }
@@ -336,8 +342,8 @@
       (cur ? '<button type="button" class="pk-clr" id="pkClr">נקה</button>' : '') + '</div></div>';
   }
 
-  function crewChosen(leg, crew) {
-    return '<div class="chosen">הרכב צוות <b>' + esc(crew) + '</b> נבחר ידנית — לא מופיע ב-OFP' +
+  function crewBanner(crew, why) {
+    return '<div class="chosen">הרכב צוות <b>' + esc(crew) + '</b> ' + esc(why) +
       '<button type="button" class="pk-clr" id="pkClr">שנה</button></div>';
   }
 
@@ -345,7 +351,11 @@
     var box = $('brief').querySelector('.picker');
     var clr = $('pkClr');
     if (clr) clr.onclick = function () {
-      var leg = currentLeg(); if (leg) { delete S.crew[leg.flightNo]; render(); }
+      var leg = currentLeg();
+      if (!leg) return;
+      if (S.crew[leg.flightNo]) { delete S.crew[leg.flightNo]; S.forcePicker[leg.flightNo] = 1; }
+      else S.forcePicker[leg.flightNo] = 1;
+      render();
     };
     if (!box) return;
 
@@ -395,6 +405,7 @@
       var a = wf.getAttribute('data-sel'), b = wc.getAttribute('data-sel');
       if (a === '' || b === '') return;
       S.crew[legNo] = a + '/' + b;
+      delete S.forcePicker[legNo];
       render();
     };
   }

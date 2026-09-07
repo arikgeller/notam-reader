@@ -30,11 +30,23 @@
       [{ k: 'רישום ב-OFP', v: reg || '—' },
        { k: 'רישומים בטבלה', v: Object.keys(data.dow).join(', ') }]);
 
-    // Crew comes from Dispatch Briefing Info. When the OFP omits it the pilot may
-    // pick it by hand; the result then says so, because it rests on that input.
+    // Crew comes from Dispatch Briefing Info. On the return leg of an
+    // out-and-back package it is usually written only once, on the outbound leg,
+    // and applies to both — so fall back to that. A hand-picked value wins over
+    // either, and every result says which source it rests on.
     var crewFromOfp = leg.briefing && leg.briefing.crew;
-    var crew = crewFromOfp || (over && over.crew) || null;
-    var manual = !crewFromOfp && !!crew;
+    var inherited = leg.crewInherited || null;
+    var picked = over && over.crew;
+    var crew = picked || crewFromOfp || (inherited && inherited.crew) || null;
+    var source = picked ? 'manual' : (crewFromOfp ? 'ofp' : (crew ? 'inherited' : null));
+    var manual = source === 'manual';
+    var crewNote = source === 'manual'
+        ? 'הרכב הצוות נבחר ידנית ואינו מופיע ב-OFP.'
+      : source === 'inherited'
+        ? 'הרכב הצוות נלקח מרגל ' + inherited.from + ' — בחבילת הלוך-חזור הוא נכתב פעם אחת וחל על שתי הרגליים.'
+        : null;
+    var crewTag = source === 'manual' ? '  (נבחר ידנית)'
+                : source === 'inherited' ? '  (מרגל ' + inherited.from + ')' : '';
     if (!crew) return R('dow', 'DOW', 'warn',
       'לא ניתן לבדוק DOW — הרכב הצוות חסר',
       [{ k: 'מקור הנתון', v: 'Dispatch Briefing Info' },
@@ -101,7 +113,7 @@
 
     var detail = [
       { k: 'ב-OFP', v: ofpDow + ' kg' },
-      { k: 'מטוס / צוות', v: reg + ' · ' + crew + (manual ? '  (נבחר ידנית)' : '') },
+      { k: 'מטוס / צוות', v: reg + ' · ' + crew + crewTag },
       { k: 'יעד', v: leg.dest + (destIata ? ' / ' + destIata : '') }
     ];
     if (expectedCode) detail.push({
@@ -112,7 +124,8 @@
     if (!stdRow) {
       return R('dow', 'DOW', 'warn',
         'אין שורה להרכב צוות ' + crew + ' בטבלת ' + reg, detail,
-        { needCrew: true, manualCrew: manual ? crew : null,
+        { needCrew: true, crewSource: source, crewFrom: inherited ? inherited.from : null,
+          manualCrew: manual ? crew : null,
           note: 'הרכבי הצוות שקיימים בטבלה: ' + Object.keys(std ? std.rows : {}).join(', ') });
     }
     if (!expectedCode) {
@@ -120,19 +133,21 @@
         return R('dow', 'DOW', 'warn',
           'היעד ' + (destIata || leg.dest) + ' לא מופיע באף קוד pantry, אבל ה-DOW תואם לקוד ' +
           matches.map(function (m) { return m.code + (m.variant === 'STANDARD' ? '' : '/' + m.variant); }).join(' או '),
-          detail, { manualCrew: manual ? crew : null });
+          detail, { crewSource: source, crewFrom: inherited ? inherited.from : null,
+                  manualCrew: manual ? crew : null });
       }
       return R('dow', 'DOW', 'warn',
         'לא ניתן לגזור קוד pantry — ' + (destIata || leg.dest) + ' ו-' +
         (leg.depIata || leg.dep) + ' אינם מופיעים באף קוד',
-        detail, { manualCrew: manual ? crew : null });
+        detail, { crewSource: source, crewFrom: inherited ? inherited.from : null,
+                  manualCrew: manual ? crew : null });
     }
     if (expectedDow === ofpDow) {
       return R('dow', 'DOW', 'ok',
         'תואם — ' + ofpDow + ' kg, קוד ' + expectedCode + ', צוות ' + crew, detail,
-        manual ? { manualCrew: crew,
-                   note: 'הרכב הצוות נבחר ידנית ואינו מופיע ב-OFP. הבדיקה תקפה רק אם הבחירה נכונה.' }
-               : null);
+        { crewSource: source, crewFrom: inherited ? inherited.from : null,
+          manualCrew: manual ? crew : null,
+          note: crewNote ? crewNote + (manual ? ' הבדיקה תקפה רק אם הבחירה נכונה.' : '') : null });
     }
     // Mismatch. The registration + crew row is what governs, so show that whole
     // row: the wrongly-taken column then stands out at a glance.
@@ -153,9 +168,10 @@
       : 'הערך שב-OFP לא תואם לאף קוד בשורת ' + crew + ' של ' + reg + '.';
     return R('dow', 'DOW', 'fail',
       'DOW שגוי בתוכנית הטיסה — צריך להיות ' + expectedDow + ' kg, בפועל ' + ofpDow + ' kg',
-      detail, { manualCrew: manual ? crew : null,
+      detail, { crewSource: source, crewFrom: inherited ? inherited.from : null,
+                manualCrew: manual ? crew : null,
                 note: alt + ' הקובע הוא הרישום ' + reg + ' והרכב הצוות ' + crew + '.' +
-                      (manual ? ' הרכב הצוות נבחר ידנית ואינו מופיע ב-OFP.' : '') });
+                      (crewNote ? ' ' + crewNote : '') });
   });
 
   /* ---------- 2. weight margins ---------- */

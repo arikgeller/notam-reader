@@ -345,6 +345,19 @@
       if (out.weatherByLeg[l.flightNo]) l.weather = out.weatherByLeg[l.flightNo];
     });
 
+    // In an out-and-back package the crew composition is written once, on the
+    // outbound leg, and applies to both. Inherit it — but only within the same
+    // aircraft, since a different registration means a different roster.
+    var donor = out.legs.filter(function (l) { return l.briefing && l.briefing.crew; })[0];
+    if (donor) {
+      out.legs.forEach(function (l) {
+        if (l === donor) return;
+        if (l.briefing && l.briefing.crew) return;
+        if (!l.reg || !donor.reg || l.reg !== donor.reg) return;
+        l.crewInherited = { crew: donor.briefing.crew, from: donor.flightNo };
+      });
+    }
+
     if (!out.weather) out.warnings.push('לא נמצא מקטע מזג אוויר');
     if (!out.legs.length) out.warnings.push('לא זוהתה תוכנית טיסה (DISPATCH RELEASE)');
     out.legs.forEach(function (l) {
