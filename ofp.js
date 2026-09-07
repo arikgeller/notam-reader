@@ -154,6 +154,13 @@
 
   /* ---------------- page 17: dispatch briefing info ---------------- */
 
+  // A defect line names its ATA item: "MEL 33-40-01B: ...", "NEF LAV ITEM 5 ...".
+  // It must be matched by its prefix — treating it as KEY: VALUE splits the item
+  // code and the defect drops out of the list entirely.
+  var RE_DEFECT = /^(MEL|CDL|NEF)\b/i;
+  // A real key is letters only. Digits mean it is an item code, not a key.
+  var RE_KV = /^([A-Z][A-Z \/]{0,17})\s*[:-]\s*(.+)$/;
+
   function parseBriefing(text) {
     var b = { notes: [], mel: [], enrAlt: [], crew: null, extraFuelReason: null, raw: null };
     var m = /D\s?I\s?S\s?P\s?A\s?T\s?C\s?H\s+B\s?R\s?I\s?E\s?F\s?I\s?N\s?G\s+I\s?N\s?F\s?O(.*)\n([\s\S]*)$/.exec(text);
@@ -163,32 +170,33 @@
     var lines = b.raw.split('\n');
     var cur = null;
     for (var i = 0; i < lines.length; i++) {
-      var raw = lines[i];
-      var t = raw.trim();
+      var raw = lines[i], t = raw.trim();
       if (!t) continue;
-      // an indented line continues the note above it
-      if (cur && /^\s{2,}/.test(raw) && !/^[A-Z0-9 \/-]{2,20}[:-]/.test(t)) {
-        cur.value += ' ' + t; continue;
-      }
-      // "MEL: ..." / "CREW: 3/7" / "CREW-2/5" / "LLBG-12 CLSD FOR T/O"
-      var kv = /^([A-Z][A-Z0-9 \/]{1,18}?)\s*[:-]\s*(.*)$/.exec(t);
-      if (kv && kv[2]) cur = { key: kv[1].trim(), value: kv[2].trim() };
-      else cur = { key: null, value: t };
+
+      if (RE_DEFECT.test(t)) { cur = { key: 'DEFECT', value: t }; b.notes.push(cur); continue; }
+
+      // an indented line, or a fragment following an unfinished defect, continues it
+      var contIndent = cur && /^\s{2,}/.test(raw) && !RE_KV.test(t);
+      var contDefect = cur && cur.key === 'DEFECT' && !/[.)]$/.test(cur.value) && !RE_KV.test(t);
+      if (contIndent || contDefect) { cur.value += ' ' + t; continue; }
+
+      var kv = RE_KV.exec(t);
+      cur = (kv && kv[2]) ? { key: kv[1].trim(), value: kv[2].trim() } : { key: null, value: t };
       b.notes.push(cur);
     }
 
     b.notes.forEach(function (n) {
-      if (n.key === 'MEL' || n.key === 'CDL') b.mel.push(n.value);
+      if (n.key === 'DEFECT') b.mel.push(n.value);
+      else if (n.key === 'MEL' || n.key === 'CDL') b.mel.push(n.key + ': ' + n.value);
       else if (n.key === 'CREW') b.crew = n.value;
       else if (n.key === 'ENR ALT') b.enrAlt = n.value.split(/[,\s]+/).filter(Boolean);
-      else if (!n.key && /EXTRA FUEL/.test(n.value)) b.extraFuelReason = n.value;
-      else if (n.key === 'EXTRA FUEL') b.extraFuelReason = n.key + ' ' + n.value;
+      else if (!n.key && /EXTRA\s+(FUEL|FEUL)/i.test(n.value)) b.extraFuelReason = n.value;
     });
     // "MEL: NONE" is an explicit all-clear, not a defect
-    b.melClear = b.mel.length === 1 && /^NONE\b/i.test(b.mel[0]);
+    b.melClear = b.mel.length === 1 && /^(MEL:\s*)?NONE\b/i.test(b.mel[0]);
     if (b.melClear) b.mel = [];
-    // per-airport remarks, e.g. "LGAV: VOR/DME ATV U/S" or "LGTS-FISKA VOR/DME U/S"
-    var NOT_ICAO = { CREW:1, MEL:1, CDL:1, INFO:1, NOTE:1, FUEL:1, ETOP:1, ETOPS:1, RVSM:1 };
+
+    var NOT_ICAO = { CREW:1, MEL:1, CDL:1, NEF:1, INFO:1, NOTE:1, FUEL:1, ETOP:1, ETOPS:1, RVSM:1 };
     b.airportNotes = b.notes.filter(function (n) {
       return n.key && /^[A-Z]{4}$/.test(n.key) && !NOT_ICAO[n.key];
     }).map(function (n) { return { icao: n.key, text: n.value }; });
