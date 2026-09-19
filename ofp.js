@@ -188,7 +188,13 @@
     b.notes.forEach(function (n) {
       if (n.key === 'DEFECT') b.mel.push(n.value);
       else if (n.key === 'MEL' || n.key === 'CDL') b.mel.push(n.key + ': ' + n.value);
-      else if (n.key === 'CREW') b.crew = n.value;
+      // Dispatchers punctuate freely ("CREW:2/5.", "CREW - 3/7"): keep only the
+      // flight/cabin pair, or the table lookup misses on a stray full stop.
+      else if (n.key === 'CREW') {
+        var cm = /(\d)\s*\/\s*(\d{1,2})/.exec(n.value);
+        b.crew = cm ? cm[1] + '/' + cm[2] : null;
+        if (!cm) b.crewRaw = n.value;
+      }
       else if (n.key === 'ENR ALT') b.enrAlt = n.value.split(/[,\s]+/).filter(Boolean);
       else if (!n.key && /EXTRA\s+(FUEL|FEUL)/i.test(n.value)) b.extraFuelReason = n.value;
     });
