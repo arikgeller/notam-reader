@@ -195,6 +195,11 @@
         b.crew = cm ? cm[1] + '/' + cm[2] : null;
         if (!cm) b.crewRaw = n.value;
       }
+      // "DOW:42977 B." — the dispatcher's own statement of DOW and pantry code
+      else if (n.key === 'DOW') {
+        var dm = /(\d{4,6})\s*(DS|[A-E])?\b/.exec(n.value.replace(/,/g, ''));
+        if (dm) b.dispDow = { kg: +dm[1], code: dm[2] || null, raw: n.value };
+      }
       else if (n.key === 'ENR ALT') b.enrAlt = n.value.split(/[,\s]+/).filter(Boolean);
       else if (!n.key && /EXTRA\s+(FUEL|FEUL)/i.test(n.value)) b.extraFuelReason = n.value;
     });

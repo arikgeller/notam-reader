@@ -8,6 +8,7 @@
   //         'skip' could not be checked, and says why
   function R(id, title, status, headline, detail, extra) {
     var r = { id: id, title: title, status: status, headline: headline, detail: detail || [] };
+    if (id === 'dow' && R.ctx) { r.expectedDow = R.ctx.expectedDow; r.expectedCode = R.ctx.expectedCode; }
     if (extra) Object.keys(extra).forEach(function (k) { r[k] = extra[k]; });
     return r;
   }
@@ -18,6 +19,29 @@
   /* ---------- 1. DOW against the weight & balance tables ---------- */
 
   define('dow', 'משקל ריק תפעולי (DOW)', function (leg, ref, over) {
+    var r = dowCore(leg, ref, over);
+    var dd = leg.briefing && leg.briefing.dispDow;
+    if (!dd || !r) return r;
+
+    // Cross-check the dispatcher's own "DOW:<kg> <code>" line against the OFP
+    // header and, when the table gave one, the expected value and code.
+    var ofp = leg.dow && leg.dow.est;
+    var bad = [];
+    if (ofp && dd.kg !== ofp) bad.push('בתדריך ' + dd.kg + ' kg, בכותרת ה-OFP ' + ofp + ' kg');
+    if (r.expectedDow && dd.kg !== r.expectedDow) bad.push('בתדריך ' + dd.kg + ' kg, לפי הטבלה ' + r.expectedDow + ' kg');
+    if (dd.code && r.expectedCode && dd.code !== r.expectedCode)
+      bad.push('בתדריך קוד ' + dd.code + ', לפי היעד קוד ' + r.expectedCode);
+
+    r.detail = (r.detail || []).concat([{ k: 'בתדריך המוקדן', v: dd.kg + ' kg' + (dd.code ? ' · קוד ' + dd.code : '') }]);
+    if (bad.length) {
+      r.status = 'fail';
+      r.headline = 'סתירה בין תדריך המוקדן לנתונים — ' + bad[0];
+      r.note = (r.note ? r.note + ' ' : '') + bad.join(' · ') + '.';
+    }
+    return r;
+  });
+
+  function dowCore(leg, ref, over) {
     // A missing input is itself a finding: without it the DOW cannot be verified,
     // so warn rather than skip quietly.
     var data = ref && ref.dow;
@@ -103,6 +127,7 @@
       });
     });
 
+    R.ctx = null;
     var std = tables.STANDARD;
     var stdRow = std && std.rows[crew];
     var expectedDow = null, expectedDoi = null;
@@ -111,6 +136,7 @@
       if (ci >= 0) { expectedDow = stdRow[ci][0]; expectedDoi = stdRow[ci][1]; }
     }
 
+    R.ctx = { expectedDow: expectedDow, expectedCode: expectedCode };
     var detail = [
       { k: 'ב-OFP', v: ofpDow + ' kg' },
       { k: 'מטוס / צוות', v: reg + ' · ' + crew + crewTag },
@@ -172,7 +198,7 @@
                 manualCrew: manual ? crew : null,
                 note: alt + ' הקובע הוא הרישום ' + reg + ' והרכב הצוות ' + crew + '.' +
                       (crewNote ? ' ' + crewNote : '') });
-  });
+  }
 
   /* ---------- 2. weight margins ---------- */
 
