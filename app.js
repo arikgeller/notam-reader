@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '5.9';
+  var APP_VERSION = '6.0';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'Flight Tools v' + APP_VERSION + ' — עזר בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -138,10 +138,25 @@
     return (H * dev / (273 + t0 - 0.5 * LAPSE * H)) / M_PER_FT;
   }
 
+  // The iOS numeric keypad has no minus key, so the sign is a button and the
+  // field holds the magnitude only.
+  var tcNeg = true;
+
+  function tcSetSign(neg) {
+    tcNeg = neg;
+    var b = $('tcSgn');
+    b.textContent = neg ? '−' : '+';
+    b.classList.toggle('neg', neg);
+  }
+
   function tcCalc() {
     var hgt = parseFloat($('tcHgt').value);
     var elv = parseFloat($('tcElv').value);
-    var tmp = parseFloat($('tcTmp').value);
+    var rawT = $('tcTmp').value;
+    // a typed minus (desktop keyboard) flips the button rather than being lost
+    if (/^-/.test(rawT)) { tcSetSign(true); rawT = rawT.replace(/^-+/, ''); $('tcTmp').value = rawT; }
+    var mag = parseFloat(rawT);
+    var tmp = isNaN(mag) ? NaN : (tcNeg ? -Math.abs(mag) : Math.abs(mag));
     var cor = $('tcCor'), nw = $('tcNew'), note = $('tcNote');
     var rowWarm = nw.parentNode;
     rowWarm.classList.remove('warm');
@@ -191,12 +206,14 @@
     var up10 = Math.ceil(raw / 10) * 10;          // always up, never down
     cor.textContent = up10.toLocaleString('en-US') + ' ft';
     nw.textContent = Math.round(hgt + up10).toLocaleString('en-US') + ' ft';
-    note.textContent = 'מדויק ' + raw.toFixed(1) + ' ft, מעוגל כלפי מעלה ל-10 ft. ' + devTxt +
-      '. מתייחס לגובה מעל מקור הלחץ.';
+    note.textContent = 'טמפרטורה ' + tmp + '°C · מדויק ' + raw.toFixed(1) +
+      ' ft, מעוגל כלפי מעלה ל-10 ft. ' + devTxt + '. מתייחס לגובה מעל מקור הלחץ.';
   }
   ['tcHgt', 'tcElv', 'tcTmp'].forEach(function (id) {
     $(id).addEventListener('input', tcCalc);
   });
+  $('tcSgn').onclick = function () { tcSetSign(!tcNeg); tcCalc(); };
+  tcSetSign(true);
 
   /* ---------- file intake ---------- */
   $('pick').onclick = function () { fileIn.click(); };
