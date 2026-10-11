@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '5.3';
+  var APP_VERSION = '5.4';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'Flight Tools v' + APP_VERSION + ' — עזר בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -96,9 +96,9 @@
 
     var deg = Math.atan(dh / (dst * FT_PER_NM)) * 180 / Math.PI;
     val.textContent = round1(deg) + '°';
-    $('gsExact').textContent = deg.toFixed(3) + '°';
+    $('gsExact').textContent = deg.toFixed(2) + '°';
     val.classList.add(deg > 3.5 ? 'hi' : deg < 2.5 ? 'lo' : 'ok');
-    sub.textContent = 'הפרש גובה ' + Math.round(dh).toLocaleString('en-US') + ' ft על פני ' + dst + ' NM';
+    sub.textContent = '';
 
     var vs3 = Math.round(dh / dst / 60 * 100) * 1;   // ft/NM
     note.innerHTML = 'שיפוע ' + Math.round(dh / dst) + ' ft/NM · ' +
