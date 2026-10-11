@@ -1,6 +1,6 @@
 {
-  "name": "FP Reader",
-  "short_name": "FP Reader",
+  "name": "Flight Tools",
+  "short_name": "Flight Tools",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f4f7fa",

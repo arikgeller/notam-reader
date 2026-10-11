@@ -1,10 +1,10 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '5.1';
+  var APP_VERSION = '5.2';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
-    'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
+    'Flight Tools v' + APP_VERSION + ' — עזר בלבד. המסמך הרשמי הוא ה‑OFP.';
 
   var S = { pages: null, parsed: null, ofp: null, ref: {}, flightIdx: -1,
            newDays: 14, showInfo: false, showFir: false, crew: {}, forcePicker: {} };
