@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '5.8';
+  var APP_VERSION = '5.9';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'Flight Tools v' + APP_VERSION + ' — עזר בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -128,7 +128,7 @@
   // Rounded up to the next 10 ft, never down.
 
   var LAPSE = 0.0065, M_PER_FT = 0.3048, LAPSE_FT = 0.0065 * 0.3048;
-  var TEMP_MAX = 10, TEMP_MIN = -60;
+  var TEMP_MAX = 10, TEMP_MIN = -50;   // FlySmart's accepted range
 
   function isaAt(elevFt) { return 15 - LAPSE_FT * elevFt; }
 
@@ -171,7 +171,7 @@
     if (tmp < TEMP_MIN) {
       $('tcTmp').parentNode.parentNode.classList.add('bad');
       cor.textContent = '—'; nw.textContent = '—';
-      note.textContent = 'מתחת ל-' + TEMP_MIN + '°C — מחוץ לטווח החישוב';
+      note.textContent = 'נמוך מ-' + Math.abs(TEMP_MIN) + '°C מתחת לאפס — מחוץ לטווח החישוב';
       return;
     }
 
