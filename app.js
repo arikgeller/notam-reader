@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '5.2';
+  var APP_VERSION = '5.3';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'Flight Tools v' + APP_VERSION + ' — עזר בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -56,6 +56,15 @@
   // angle = atan( height lost / distance run ), one decimal place
   var FT_PER_NM = 6076.115;
 
+  // toFixed leaves ties to the binary representation: 3.05 drops to 3.0 while
+  // 3.25 climbs to 3.3, and an atan result sits ~1e-14 off a clean tie anyway.
+  // Collapse that noise to a decimal first, then round half up on integers, so
+  // the boundary is exact and always lands upward.
+  function round1(x) {
+    var micro = Math.round(Number(x.toFixed(6)) * 1e6);   // integer micro-degrees
+    return (Math.floor((micro + 50000) / 100000) / 10).toFixed(1);
+  }
+
   function gsCalc() {
     var faf = parseFloat($('gsFaf').value);
     var fld = parseFloat($('gsFld').value);
@@ -67,12 +76,14 @@
     });
 
     if (isNaN(faf) || isNaN(fld) || isNaN(dst)) {
-      val.textContent = '—'; sub.textContent = 'הזן את שלושת הנתונים'; note.textContent = '';
+      val.textContent = '—'; sub.textContent = 'הזן את שלושת הנתונים';
+      note.textContent = ''; $('gsExact').textContent = '';
       return;
     }
     if (dst <= 0) {
       $('gsDst').parentNode.parentNode.classList.add('bad');
-      val.textContent = '—'; sub.textContent = 'מרחק הפיינל חייב להיות גדול מאפס'; note.textContent = '';
+      val.textContent = '—'; sub.textContent = 'מרחק הפיינל חייב להיות גדול מאפס';
+      note.textContent = ''; $('gsExact').textContent = '';
       return;
     }
     var dh = faf - fld;
@@ -80,11 +91,12 @@
       $('gsFaf').parentNode.parentNode.classList.add('bad');
       val.textContent = '—';
       sub.textContent = 'גובה ה‑FAF חייב להיות גבוה מגובה השדה';
-      note.textContent = ''; return;
+      note.textContent = ''; $('gsExact').textContent = ''; return;
     }
 
     var deg = Math.atan(dh / (dst * FT_PER_NM)) * 180 / Math.PI;
-    val.textContent = deg.toFixed(1) + '°';
+    val.textContent = round1(deg) + '°';
+    $('gsExact').textContent = deg.toFixed(3) + '°';
     val.classList.add(deg > 3.5 ? 'hi' : deg < 2.5 ? 'lo' : 'ok');
     sub.textContent = 'הפרש גובה ' + Math.round(dh).toLocaleString('en-US') + ' ft על פני ' + dst + ' NM';
 
