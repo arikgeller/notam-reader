@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '6.0';
+  var APP_VERSION = '6.2';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'Flight Tools v' + APP_VERSION + ' — עזר בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -138,25 +138,31 @@
     return (H * dev / (273 + t0 - 0.5 * LAPSE * H)) / M_PER_FT;
   }
 
-  // The iOS numeric keypad has no minus key, so the sign is a button and the
-  // field holds the magnitude only.
-  var tcNeg = true;
+  // The iOS numeric keypad has no minus key, so each signed field keeps its sign
+  // in a button and holds the magnitude only. Elevation needs it too: Schiphol
+  // sits at -11 ft, Bar Yehuda at -1,240.
+  var tcNeg = true, tcElvNeg = false;
 
-  function tcSetSign(neg) {
-    tcNeg = neg;
-    var b = $('tcSgn');
+  function setSign(btnId, neg) {
+    var b = $(btnId);
     b.textContent = neg ? '−' : '+';
     b.classList.toggle('neg', neg);
+  }
+  function tcSetSign(neg) { tcNeg = neg; setSign('tcSgn', neg); }
+  function tcSetElvSign(neg) { tcElvNeg = neg; setSign('tcElvSgn', neg); }
+
+  // a typed minus (full keyboard) flips the button rather than being lost
+  function readSigned(inputId, neg, flip) {
+    var raw = $(inputId).value;
+    if (/^-/.test(raw)) { flip(true); neg = true; raw = raw.replace(/^-+/, ''); $(inputId).value = raw; }
+    var mag = parseFloat(raw);
+    return isNaN(mag) ? NaN : (neg ? -Math.abs(mag) : Math.abs(mag));
   }
 
   function tcCalc() {
     var hgt = parseFloat($('tcHgt').value);
-    var elv = parseFloat($('tcElv').value);
-    var rawT = $('tcTmp').value;
-    // a typed minus (desktop keyboard) flips the button rather than being lost
-    if (/^-/.test(rawT)) { tcSetSign(true); rawT = rawT.replace(/^-+/, ''); $('tcTmp').value = rawT; }
-    var mag = parseFloat(rawT);
-    var tmp = isNaN(mag) ? NaN : (tcNeg ? -Math.abs(mag) : Math.abs(mag));
+    var elv = readSigned('tcElv', tcElvNeg, function (n) { tcSetElvSign(n); });
+    var tmp = readSigned('tcTmp', tcNeg, function (n) { tcSetSign(n); });
     var cor = $('tcCor'), nw = $('tcNew'), note = $('tcNote');
     var rowWarm = nw.parentNode;
     rowWarm.classList.remove('warm');
@@ -173,13 +179,14 @@
       cor.textContent = '—'; nw.textContent = '—';
       note.textContent = 'HGT AAL חייב להיות גדול מאפס'; return;
     }
-    // Operationally the correction is applied below 0 C only. (FlySmart will
-    // accept up to +10 C, but the procedure does not call for a correction there.)
-    if (tmp >= 0) {
+    // The correction is applied at 0 C and below. Note the boundary: FlySmart
+    // does compute at exactly 0 C (2000 ft AAL, elev 5000 ft -> 40 ft), so the
+    // cut-off is above zero, not at it.
+    if (tmp > 0) {
       cor.textContent = '0 ft';
       nw.textContent = Math.round(hgt).toLocaleString('en-US') + ' ft';
       rowWarm.classList.add('warm');
-      note.textContent = 'תיקון טמפרטורה מתבצע מתחת ל-0°C בלבד' +
+      note.textContent = 'תיקון טמפרטורה מתבצע ב-0°C ומטה בלבד' +
         (tmp > TEMP_MAX ? ' (ומעל ' + TEMP_MAX + '°C FlySmart לא מחשב כלל)' : '') + '.';
       return;
     }
@@ -213,7 +220,8 @@
     $(id).addEventListener('input', tcCalc);
   });
   $('tcSgn').onclick = function () { tcSetSign(!tcNeg); tcCalc(); };
-  tcSetSign(true);
+  $('tcElvSgn').onclick = function () { tcSetElvSign(!tcElvNeg); tcCalc(); };
+  tcSetSign(true); tcSetElvSign(false);
 
   /* ---------- file intake ---------- */
   $('pick').onclick = function () { fileIn.click(); };
