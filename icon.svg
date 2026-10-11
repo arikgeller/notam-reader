@@ -1,7 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-<rect width="512" height="512" rx="96" fill="#1b2a3a"/>
-<rect x="96" y="128" width="320" height="44" rx="10" fill="#ff4d4f"/>
-<rect x="96" y="204" width="320" height="44" rx="10" fill="#ffa726"/>
-<rect x="96" y="280" width="230" height="44" rx="10" fill="#7f92a6"/>
-<rect x="96" y="356" width="230" height="44" rx="10" fill="#7f92a6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<rect width="64" height="64" rx="12" fill="#1b2a3a"/>
+<path d="M32.0 7.5L34.0 11.0L34.7 25.5L54.0 36.5L54.0 39.3L35.1 36.0L35.1 45.0L43.8 50.8L43.8 52.8L34.6 49.0L33.4 55.8L32.0 56.3L30.6 55.8L29.4 49.0L20.2 52.8L20.2 50.8L28.9 45.0L28.9 36.0L10.0 39.3L10.0 36.5L29.3 25.5L30.0 11.0Z" fill="#eef4fb"/>
+<ellipse cx="40.6" cy="32.2" rx="2.1" ry="3.4" fill="#9fb5cb"/>
+<ellipse cx="23.4" cy="32.2" rx="2.1" ry="3.4" fill="#9fb5cb"/>
 </svg>
