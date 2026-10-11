@@ -1,4 +1,4 @@
-var CACHE = 'fp-reader-4.9';
+var CACHE = 'fp-reader-5.0';
 var ASSETS = ['./', './index.html', './app.js', './parser.js', './ofp.js', './checks.js', './wx.js', './notam-plain.js', './geo.js', './data/dow.json', './data/limits.json', './data/coast.json', './pdfload.js',
               './manifest.json', './icon.svg',
               './vendor/pdf.min.mjs', './vendor/pdf.worker.min.mjs'];

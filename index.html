@@ -105,6 +105,41 @@ button:active{transform:scale(.98)}
 @media (max-width:400px){.feats{grid-template-columns:1fr}.feats li{display:flex;gap:8px;
   justify-content:center;align-items:baseline;padding:11px}.feats b{margin:0}}
 
+/* ---- mode chooser ---- */
+.modes{display:grid;gap:11px;margin:18px 0 0}
+.mode{display:flex;align-items:center;gap:13px;width:100%;text-align:start;padding:17px 16px;
+  border:1px solid var(--line);border-radius:14px;background:var(--surface);
+  box-shadow:0 4px 14px var(--shadow1);transition:.15s}
+.mode:hover{border-color:var(--accent);transform:translateY(-1px)}
+.mi{width:44px;height:44px;border-radius:12px;flex:none;color:var(--accent);background:var(--tint);
+  border:1px solid var(--tintbd);display:flex;align-items:center;justify-content:center}
+.mt{flex:1;display:flex;flex-direction:column;gap:2px}
+.mt b{font-size:17px;font-weight:800;letter-spacing:.3px}
+.mt i{font-style:normal;font-size:13px;color:var(--dim)}
+.mc{color:var(--dim);font-size:22px;transform:scaleX(-1)}
+
+/* ---- glide slope calculator ---- */
+.gs-in{padding:14px 15px 4px}
+.gsf{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.gsf>span:first-child{flex:1;font-size:15px}
+.gsu{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:10px;
+  background:var(--surface);padding:0 11px 0 0;direction:ltr}
+.gsu input{width:112px;border:0;background:transparent;color:var(--txt);padding:11px 12px;
+  font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;text-align:left;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.gsu input:focus{outline:none}
+.gsu input::-webkit-outer-spin-button,.gsu input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.gsu i{font-style:normal;font-size:12px;color:var(--dim);min-width:18px}
+.gsf.bad .gsu{border-color:var(--c1)}
+.gs-out{margin:6px 15px 14px;padding:18px 14px;border-radius:12px;background:var(--panel2);
+  border:1px solid var(--line);text-align:center}
+.gs-lbl{font-size:13px;color:var(--dim)}
+.gs-val{font-size:46px;font-weight:800;line-height:1.15;font-variant-numeric:tabular-nums;
+  direction:ltr;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.gs-val.ok{color:var(--new)} .gs-val.hi{color:var(--c1)} .gs-val.lo{color:var(--c2)}
+.gs-sub{font-size:13px;color:var(--dim);margin-top:4px}
+.gs-note{margin:0 15px 14px;font-size:12.5px;color:var(--dim);line-height:1.5}
+
 /* ---- controls ---- */
 .bar{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 13px;
   margin:14px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
@@ -296,6 +331,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:30px 0 24px}
     <span class="logo">FP Reader</span>
     <span class="ver" id="ver"></span>
     <span class="spacer"></span>
+    <button id="home2" class="iconbtn" type="button" aria-label="חזרה למסך הראשי">⌂</button>
     <button id="theme" class="iconbtn" type="button" aria-label="מצב תצוגה"></button>
     <button id="reset">קובץ חדש</button>
   </div>
@@ -303,24 +339,47 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:30px 0 24px}
 
 <div class="wrap">
 
-  <section id="drop">
+  <section id="home">
     <div class="hero">
       <div class="mark" aria-hidden="true">
         <svg viewBox="0 0 64 64" width="58" height="58">
           <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stop-color="#58a6ff"/><stop offset="1" stop-color="#3fb950"/>
           </linearGradient></defs>
-          <rect x="2" y="2" width="60" height="60" rx="16" fill="#111823" stroke="url(#g)" stroke-width="2"/>
+          <rect x="2" y="2" width="60" height="60" rx="16" fill="#1b2a3a" stroke="url(#g)" stroke-width="2"/>
           <rect x="14" y="17" width="36" height="5" rx="2.5" fill="#ff4d4f"/>
           <rect x="14" y="29" width="36" height="5" rx="2.5" fill="#ffa726"/>
-          <rect x="14" y="41" width="22" height="5" rx="2.5" fill="#5b6976"/>
+          <rect x="14" y="41" width="22" height="5" rx="2.5" fill="#7f92a6"/>
         </svg>
       </div>
       <h1 class="wordmark">FP<span>READER</span></h1>
       <div class="runway" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-      <p class="tag">עובר על תוכנית הטיסה כולה, בודק את הנתונים<br>ומתדרך על מה שחשוב</p>
     </div>
 
+    <div class="modes">
+      <button type="button" class="mode" data-go="fp">
+        <span class="mi" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+               stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/>
+            <path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>
+        </span>
+        <span class="mt"><b>FP Reader</b><i>קריאת תוכנית טיסה ותדריך</i></span>
+        <span class="mc">›</span>
+      </button>
+      <button type="button" class="mode" data-go="gs">
+        <span class="mi" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+               stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 20h18"/><path d="M20 5 4 20"/><path d="M8 20a12 12 0 0 0 3-8"/></svg>
+        </span>
+        <span class="mt"><b>GS Calc</b><i>חישוב זווית הנמכה</i></span>
+        <span class="mc">›</span>
+      </button>
+    </div>
+  </section>
+
+  <section id="drop" class="hidden">
     <div class="dropzone" id="dz">
       <div class="dz-ico" aria-hidden="true">
         <svg viewBox="0 0 24 24" width="30" height="30" fill="none"
@@ -340,6 +399,26 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:30px 0 24px}
       <li><b>סינון</b><span>לפי חלון הטיסה</span></li>
       <li><b>Offline</b><span>הקובץ לא עוזב את המכשיר</span></li>
     </ul>
+  </section>
+
+  <section id="gs" class="hidden">
+    <div class="sec sec-1">
+      <h3><span class="n">∡</span>זווית ההנמכה</h3>
+      <div class="gs-in">
+        <label class="gsf"><span>גובה ה‑FAF</span>
+          <span class="gsu"><input id="gsFaf" type="number" inputmode="decimal" step="1" placeholder="—"><i>ft</i></span></label>
+        <label class="gsf"><span>גובה השדה</span>
+          <span class="gsu"><input id="gsFld" type="number" inputmode="decimal" step="1" placeholder="—"><i>ft</i></span></label>
+        <label class="gsf"><span>מרחק הפיינל</span>
+          <span class="gsu"><input id="gsDst" type="number" inputmode="decimal" step="0.1" placeholder="—"><i>NM</i></span></label>
+      </div>
+      <div class="gs-out" id="gsOut">
+        <div class="gs-lbl">זווית ההנמכה</div>
+        <div class="gs-val" id="gsVal">—</div>
+        <div class="gs-sub" id="gsSub">הזן את שלושת הנתונים</div>
+      </div>
+      <div class="gs-note" id="gsNote"></div>
+    </div>
   </section>
 
   <div id="app" class="hidden">
@@ -371,6 +450,7 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:30px 0 24px}
         <button data-v="0" aria-pressed="true">מוסתר</button>
       </span>
     </div>
+  </div>
   </div>
 
   <footer id="foot"></footer>

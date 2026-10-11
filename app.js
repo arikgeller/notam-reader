@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '4.9';
+  var APP_VERSION = '5.0';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'FP Reader v' + APP_VERSION + ' — עזר קריאה בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -37,6 +37,66 @@
   var dzTitle = dz.querySelector('h2'), dzSub = dz.querySelector('p');
   var DZ_TITLE = dzTitle.textContent, DZ_SUB = dzSub.textContent;
 
+  /* ---------- screens ---------- */
+
+  var SCREENS = ['home', 'drop', 'gs', 'app'];
+  function show(name) {
+    SCREENS.forEach(function (id) { $(id).classList.toggle('hidden', id !== name); });
+    $('home2').classList.toggle('hidden', name === 'home');
+    $('hdr').classList.toggle('bare', name !== 'app');
+    window.scrollTo(0, 0);
+  }
+
+  [].forEach.call(document.querySelectorAll('.mode'), function (b) {
+    b.onclick = function () { show(b.getAttribute('data-go') === 'gs' ? 'gs' : 'drop'); };
+  });
+  $('home2').onclick = function () { show('home'); };
+
+  /* ---------- glide slope ---------- */
+  // angle = atan( height lost / distance run ), one decimal place
+  var FT_PER_NM = 6076.115;
+
+  function gsCalc() {
+    var faf = parseFloat($('gsFaf').value);
+    var fld = parseFloat($('gsFld').value);
+    var dst = parseFloat($('gsDst').value);
+    var val = $('gsVal'), sub = $('gsSub'), note = $('gsNote');
+    val.className = 'gs-val';
+    [['gsFaf', faf], ['gsFld', fld], ['gsDst', dst]].forEach(function (p) {
+      $(p[0]).parentNode.parentNode.classList.remove('bad');
+    });
+
+    if (isNaN(faf) || isNaN(fld) || isNaN(dst)) {
+      val.textContent = '—'; sub.textContent = 'הזן את שלושת הנתונים'; note.textContent = '';
+      return;
+    }
+    if (dst <= 0) {
+      $('gsDst').parentNode.parentNode.classList.add('bad');
+      val.textContent = '—'; sub.textContent = 'מרחק הפיינל חייב להיות גדול מאפס'; note.textContent = '';
+      return;
+    }
+    var dh = faf - fld;
+    if (dh <= 0) {
+      $('gsFaf').parentNode.parentNode.classList.add('bad');
+      val.textContent = '—';
+      sub.textContent = 'גובה ה‑FAF חייב להיות גבוה מגובה השדה';
+      note.textContent = ''; return;
+    }
+
+    var deg = Math.atan(dh / (dst * FT_PER_NM)) * 180 / Math.PI;
+    val.textContent = deg.toFixed(1) + '°';
+    val.classList.add(deg > 3.5 ? 'hi' : deg < 2.5 ? 'lo' : 'ok');
+    sub.textContent = 'הפרש גובה ' + Math.round(dh).toLocaleString('en-US') + ' ft על פני ' + dst + ' NM';
+
+    var vs3 = Math.round(dh / dst / 60 * 100) * 1;   // ft/NM
+    note.innerHTML = 'שיפוע ' + Math.round(dh / dst) + ' ft/NM · ' +
+      'לצורך השוואה, גלישה סטנדרטית היא 3.0° (כ‑318 ft/NM).' +
+      (deg > 3.5 ? ' <b>הזווית תלולה מהרגיל.</b>' : deg < 2.5 ? ' <b>הזווית רדודה מהרגיל.</b>' : '');
+  }
+  ['gsFaf', 'gsFld', 'gsDst'].forEach(function (id) {
+    $(id).addEventListener('input', gsCalc);
+  });
+
   /* ---------- file intake ---------- */
   $('pick').onclick = function () { fileIn.click(); };
   fileIn.onchange = function () { if (fileIn.files[0]) load(fileIn.files[0]); };
@@ -51,9 +111,7 @@
   });
   $('reset').onclick = function () {
     S.parsed = null; fileIn.value = '';
-    $('app').classList.add('hidden'); drop.classList.remove('hidden');
-    $('hdr').classList.add('bare'); err.textContent = '';
-    window.scrollTo(0, 0);
+    show('drop'); err.textContent = '';
   };
 
   function ready() {
@@ -90,9 +148,7 @@
       if (S.parsed.error) throw new Error(S.parsed.error);
       if (!S.parsed.notams.length) throw new Error('נמצא מקטע NOTAM אך לא זוהו הודעות בתוכו');
       S.flightIdx = S.parsed.flights.length ? 0 : -1;
-      drop.classList.add('hidden');
-      $('app').classList.remove('hidden');
-      $('hdr').classList.remove('bare');
+      show('app');
       buildFlightSeg();
       render();
     } catch (e) {
