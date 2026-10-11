@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '5.5';
+  var APP_VERSION = '5.6';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'Flight Tools v' + APP_VERSION + ' — עזר בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -113,18 +113,28 @@
   });
 
   /* ---------- temperature correction ---------- */
-  // ICAO Doc 8168, Part III, 1-4: the correction to add to a promulgated height
-  //   dH = H * (15 - t0) / (273 + t0 - 0.5 * L * H),  L = 0.0065 K/m
-  // H is the height ABOVE the altimeter setting source, which is what HGT AAL is.
-  // The published formula measures the deviation against ISA at sea level, so at
-  // a high aerodrome it over-corrects — the safe direction, and it matches the
-  // ICAO table. Rounded up to the next 10 ft, never down.
+  // Correction to add to a promulgated height, so the aircraft flies the true
+  // height in cold air:
+  //   dH = H * (ISA(elev) - t0) / (273 + t0 - 0.5 * L * H),  L = 0.0065 K/m
+  //   ISA(elev) = 15 - 0.0019812 * elev_ft
+  // H is the height ABOVE the altimeter setting source, i.e. HGT AAL.
+  //
+  // The deviation is measured against ISA AT THE AERODROME, not at sea level.
+  // The published ICAO Doc 8168 formula uses (15 - t0), which assumes a
+  // sea-level aerodrome and over-corrects badly higher up. Verified against
+  // Airbus FlySmart, which is what the crew actually flies:
+  //   2000 ft AAL, elev   50 ft, -3 C  ->  140 ft   (sea-level form also gives 140)
+  //   2000 ft AAL, elev 5000 ft,  0 C  ->   40 ft   (sea-level form gives 110)
+  // Rounded up to the next 10 ft, never down.
 
-  var LAPSE = 0.0065, M_PER_FT = 0.3048;
+  var LAPSE = 0.0065, M_PER_FT = 0.3048, LAPSE_FT = 0.0065 * 0.3048;
 
-  function tempCorrection(hgtFt, t0) {
+  function isaAt(elevFt) { return 15 - LAPSE_FT * elevFt; }
+
+  function tempCorrection(hgtFt, elevFt, t0) {
     var H = hgtFt * M_PER_FT;
-    return (H * (15 - t0) / (273 + t0 - 0.5 * LAPSE * H)) / M_PER_FT;
+    var dev = isaAt(elevFt) - t0;                  // positive when colder than ISA
+    return (H * dev / (273 + t0 - 0.5 * LAPSE * H)) / M_PER_FT;
   }
 
   function tcCalc() {
@@ -153,8 +163,8 @@
       note.textContent = 'טמפרטורה מחוץ לטווח סביר'; return;
     }
 
-    var raw = tempCorrection(hgt, tmp);
-    var isaAtFld = 15 - 0.00198 * elv;
+    var raw = tempCorrection(hgt, elv, tmp);
+    var isaAtFld = isaAt(elv);
     var dev = tmp - isaAtFld;
     var devTxt = 'ISA ' + (dev >= 0 ? '+' : '') + Math.round(dev) + '°C' +
                  ' (ISA בשדה ' + isaAtFld.toFixed(1) + '°C)';
