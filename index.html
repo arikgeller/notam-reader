@@ -142,6 +142,16 @@ button:active{transform:scale(.98)}
 .gs-sub{font-size:13px;color:var(--dim);margin-top:6px}
 .gs-note{margin:0 15px 14px;font-size:12.5px;color:var(--dim);line-height:1.5}
 
+/* temperature correction */
+.tc-out{margin:6px 15px 12px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.tc-row{display:flex;align-items:baseline;gap:12px;padding:13px 14px;background:var(--panel2)}
+.tc-row+.tc-row{border-top:1px solid var(--line)}
+.tc-k{flex:1;font-size:12.5px;color:var(--dim);letter-spacing:.4px;direction:ltr;text-align:left}
+.tc-v{font-size:27px;font-weight:800;font-variant-numeric:tabular-nums;direction:ltr;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.tc-row.big .tc-v{font-size:36px;color:var(--accent)}
+.tc-row.warm .tc-v{color:var(--new);font-size:20px}
+
 /* ---- controls ---- */
 .bar{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:11px 13px;
   margin:14px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center;
@@ -369,6 +379,15 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:30px 0 24px}
         <span class="mt"><b>FP Reader</b><i>קריאת תוכנית טיסה ותדריך</i></span>
         <span class="mc">›</span>
       </button>
+      <button type="button" class="mode" data-go="tc">
+        <span class="mi" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
+               stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13.5V5a2 2 0 1 1 4 0v8.5a4 4 0 1 1-4 0Z"/><path d="M12 17.5h.01"/></svg>
+        </span>
+        <span class="mt"><b>Temp Corr</b><i>תיקון גובה לטמפרטורה</i></span>
+        <span class="mc">›</span>
+      </button>
       <button type="button" class="mode" data-go="gs">
         <span class="mi" aria-hidden="true">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor"
@@ -401,6 +420,25 @@ footer{color:var(--dim);font-size:12px;text-align:center;padding:30px 0 24px}
       <li><b>סינון</b><span>לפי חלון הטיסה</span></li>
       <li><b>Offline</b><span>הקובץ לא עוזב את המכשיר</span></li>
     </ul>
+  </section>
+
+  <section id="tc" class="hidden">
+    <div class="sec sec-3">
+      <h3><span class="n">°</span>תיקון גובה לטמפרטורה</h3>
+      <div class="gs-in">
+        <label class="gsf"><span>HGT AAL</span>
+          <span class="gsu"><input id="tcHgt" type="number" inputmode="decimal" step="10" placeholder="—"><i>ft</i></span></label>
+        <label class="gsf"><span>ARPT ELEVN</span>
+          <span class="gsu"><input id="tcElv" type="number" inputmode="decimal" step="10" placeholder="—"><i>ft</i></span></label>
+        <label class="gsf"><span>ARPT TEMP</span>
+          <span class="gsu"><input id="tcTmp" type="number" inputmode="decimal" step="1" placeholder="—"><i>°C</i></span></label>
+      </div>
+      <div class="tc-out">
+        <div class="tc-row"><span class="tc-k">CORRECTION</span><span class="tc-v" id="tcCor">—</span></div>
+        <div class="tc-row big"><span class="tc-k">CORRECTED AAL</span><span class="tc-v" id="tcNew">—</span></div>
+      </div>
+      <div class="gs-note" id="tcNote">הזן את שלושת הנתונים</div>
+    </div>
   </section>
 
   <section id="gs" class="hidden">

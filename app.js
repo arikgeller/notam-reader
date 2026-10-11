@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '5.4';
+  var APP_VERSION = '5.5';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'Flight Tools v' + APP_VERSION + ' — עזר בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -39,7 +39,7 @@
 
   /* ---------- screens ---------- */
 
-  var SCREENS = ['home', 'drop', 'gs', 'app'];
+  var SCREENS = ['home', 'drop', 'gs', 'tc', 'app'];
   function show(name) {
     SCREENS.forEach(function (id) { $(id).classList.toggle('hidden', id !== name); });
     $('home2').classList.toggle('hidden', name === 'home');
@@ -48,7 +48,10 @@
   }
 
   [].forEach.call(document.querySelectorAll('.mode'), function (b) {
-    b.onclick = function () { show(b.getAttribute('data-go') === 'gs' ? 'gs' : 'drop'); };
+    b.onclick = function () {
+      var go = b.getAttribute('data-go');
+      show(go === 'gs' ? 'gs' : go === 'tc' ? 'tc' : 'drop');
+    };
   });
   $('home2').onclick = function () { show('home'); };
 
@@ -107,6 +110,70 @@
   }
   ['gsFaf', 'gsFld', 'gsDst'].forEach(function (id) {
     $(id).addEventListener('input', gsCalc);
+  });
+
+  /* ---------- temperature correction ---------- */
+  // ICAO Doc 8168, Part III, 1-4: the correction to add to a promulgated height
+  //   dH = H * (15 - t0) / (273 + t0 - 0.5 * L * H),  L = 0.0065 K/m
+  // H is the height ABOVE the altimeter setting source, which is what HGT AAL is.
+  // The published formula measures the deviation against ISA at sea level, so at
+  // a high aerodrome it over-corrects — the safe direction, and it matches the
+  // ICAO table. Rounded up to the next 10 ft, never down.
+
+  var LAPSE = 0.0065, M_PER_FT = 0.3048;
+
+  function tempCorrection(hgtFt, t0) {
+    var H = hgtFt * M_PER_FT;
+    return (H * (15 - t0) / (273 + t0 - 0.5 * LAPSE * H)) / M_PER_FT;
+  }
+
+  function tcCalc() {
+    var hgt = parseFloat($('tcHgt').value);
+    var elv = parseFloat($('tcElv').value);
+    var tmp = parseFloat($('tcTmp').value);
+    var cor = $('tcCor'), nw = $('tcNew'), note = $('tcNote');
+    var rowWarm = nw.parentNode;
+    rowWarm.classList.remove('warm');
+    ['tcHgt', 'tcElv', 'tcTmp'].forEach(function (id) {
+      $(id).parentNode.parentNode.classList.remove('bad');
+    });
+
+    if (isNaN(hgt) || isNaN(elv) || isNaN(tmp)) {
+      cor.textContent = '—'; nw.textContent = '—';
+      note.textContent = 'הזן את שלושת הנתונים'; return;
+    }
+    if (hgt <= 0) {
+      $('tcHgt').parentNode.parentNode.classList.add('bad');
+      cor.textContent = '—'; nw.textContent = '—';
+      note.textContent = 'HGT AAL חייב להיות גדול מאפס'; return;
+    }
+    if (tmp < -70 || tmp > 60) {
+      $('tcTmp').parentNode.parentNode.classList.add('bad');
+      cor.textContent = '—'; nw.textContent = '—';
+      note.textContent = 'טמפרטורה מחוץ לטווח סביר'; return;
+    }
+
+    var raw = tempCorrection(hgt, tmp);
+    var isaAtFld = 15 - 0.00198 * elv;
+    var dev = tmp - isaAtFld;
+    var devTxt = 'ISA ' + (dev >= 0 ? '+' : '') + Math.round(dev) + '°C' +
+                 ' (ISA בשדה ' + isaAtFld.toFixed(1) + '°C)';
+
+    if (raw <= 0) {
+      cor.textContent = '0 ft';
+      nw.textContent = Math.round(hgt).toLocaleString('en-US') + ' ft';
+      rowWarm.classList.add('warm');
+      note.textContent = 'חם מ-ISA — האלטימטר קורא נמוך מהגובה האמיתי, אין צורך בתיקון. ' + devTxt;
+      return;
+    }
+    var up10 = Math.ceil(raw / 10) * 10;          // always up, never down
+    cor.textContent = up10.toLocaleString('en-US') + ' ft';
+    nw.textContent = Math.round(hgt + up10).toLocaleString('en-US') + ' ft';
+    note.textContent = 'מדויק ' + raw.toFixed(1) + ' ft, מעוגל כלפי מעלה ל-10 ft. ' + devTxt +
+      '. מתייחס לגובה מעל מקור הלחץ.';
+  }
+  ['tcHgt', 'tcElv', 'tcTmp'].forEach(function (id) {
+    $(id).addEventListener('input', tcCalc);
   });
 
   /* ---------- file intake ---------- */
