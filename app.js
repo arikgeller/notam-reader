@@ -1,7 +1,7 @@
 /* NOTAM Reader — UI wiring. */
 (function () {
   'use strict';
-  var APP_VERSION = '5.6';
+  var APP_VERSION = '5.8';
   document.getElementById('ver').textContent = 'v' + APP_VERSION;
   document.getElementById('foot').textContent =
     'Flight Tools v' + APP_VERSION + ' — עזר בלבד. המסמך הרשמי הוא ה‑OFP.';
@@ -128,6 +128,7 @@
   // Rounded up to the next 10 ft, never down.
 
   var LAPSE = 0.0065, M_PER_FT = 0.3048, LAPSE_FT = 0.0065 * 0.3048;
+  var TEMP_MAX = 10, TEMP_MIN = -60;
 
   function isaAt(elevFt) { return 15 - LAPSE_FT * elevFt; }
 
@@ -157,10 +158,21 @@
       cor.textContent = '—'; nw.textContent = '—';
       note.textContent = 'HGT AAL חייב להיות גדול מאפס'; return;
     }
-    if (tmp < -70 || tmp > 60) {
+    // Operationally the correction is applied below 0 C only. (FlySmart will
+    // accept up to +10 C, but the procedure does not call for a correction there.)
+    if (tmp >= 0) {
+      cor.textContent = '0 ft';
+      nw.textContent = Math.round(hgt).toLocaleString('en-US') + ' ft';
+      rowWarm.classList.add('warm');
+      note.textContent = 'תיקון טמפרטורה מתבצע מתחת ל-0°C בלבד' +
+        (tmp > TEMP_MAX ? ' (ומעל ' + TEMP_MAX + '°C FlySmart לא מחשב כלל)' : '') + '.';
+      return;
+    }
+    if (tmp < TEMP_MIN) {
       $('tcTmp').parentNode.parentNode.classList.add('bad');
       cor.textContent = '—'; nw.textContent = '—';
-      note.textContent = 'טמפרטורה מחוץ לטווח סביר'; return;
+      note.textContent = 'מתחת ל-' + TEMP_MIN + '°C — מחוץ לטווח החישוב';
+      return;
     }
 
     var raw = tempCorrection(hgt, elv, tmp);
@@ -169,7 +181,7 @@
     var devTxt = 'ISA ' + (dev >= 0 ? '+' : '') + Math.round(dev) + '°C' +
                  ' (ISA בשדה ' + isaAtFld.toFixed(1) + '°C)';
 
-    if (raw <= 0) {
+    if (raw <= 0) {          // a high aerodrome can still sit above ISA below 0 C
       cor.textContent = '0 ft';
       nw.textContent = Math.round(hgt).toLocaleString('en-US') + ' ft';
       rowWarm.classList.add('warm');
